@@ -74,12 +74,22 @@ def which_brew() -> str:
     """
     Find the `brew` executable, or install Homebrew if not found.
     """
-    brew: str = which("brew") or "brew"
+    brew: str | None
+    brew = which("brew") or "brew"
     try:
         check_output((brew, "--version"))
     except (CalledProcessError, FileNotFoundError):
         install_brew()
-        brew = which("brew") or "brew"
+        brew = which("brew")
+        if not brew:
+            if sys.platform == "darwin":
+                brew = "/opt/homebrew/bin/brew"
+                if not os.path.exists(brew):
+                    brew = "brew"
+            else:
+                brew = "/home/linuxbrew/.linuxbrew/bin/brew"
+                if not os.path.exists(brew):
+                    brew = "brew"
     return brew
 
 

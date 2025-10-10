@@ -58,8 +58,8 @@ requirements:
 
 # Apply formatting and enforce linting
 format:
-	hatch fmt --formatter
-	hatch fmt --linter
+	hatch fmt --formatter && \
+	hatch fmt --linter && \
 	hatch run mypy && \
 	echo "Format Successful!"
 
