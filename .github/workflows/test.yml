@@ -39,4 +39,4 @@ jobs:
     - run: which hatch
     - run: sudo echo $PATH
     - name: test
-      run: hatch run hatch-test.py${{ matrix.python }}:sudo python -m pytest -s -vv
+      run: sudo "$(hatch env find hatch-test.py${{ matrix.python }})/bin/python" -m pytest -s -vv
