@@ -14,6 +14,10 @@ from subprocess import (
 )
 from typing import TYPE_CHECKING
 
+from decorative_secrets.errors import (
+    OnePasswordCommandLineInterfaceNotInstalledError,
+)
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -106,10 +110,16 @@ def install_op() -> None:
     """
     Install the 1Password CLI.
     """
+    message: str
     if sys.platform.startswith("win"):
         check_output((which("winget") or "winget", "install", "1password-cli"))
-    else:  # if sys.platform == "darwin"
-        check_output((which_brew(), "install", "1password-cli"))
+    elif sys.platform == "darwin":
+        try:
+            check_output((which_brew(), "install", "1password-cli"))
+        except (CalledProcessError, FileNotFoundError) as error:
+            raise OnePasswordCommandLineInterfaceNotInstalledError from error
+    else:
+        raise OnePasswordCommandLineInterfaceNotInstalledError
 
 
 def which_op() -> str:
