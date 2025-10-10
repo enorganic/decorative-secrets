@@ -39,4 +39,5 @@ jobs:
     - run: which hatch
     - run: sudo echo $PATH
     - name: test
+      shell: bash 
       run: sudo hatch test -c -py ${{ matrix.python }}
