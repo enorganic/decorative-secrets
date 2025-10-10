@@ -38,6 +38,6 @@ jobs:
       uses: pypa/hatch@install
     - run: which hatch
     - run: sudo echo $PATH
-    - run: bash -c "ls \"$(hatch env find hatch-test.py${{ matrix.python }})/bin/python\"
+    - run: bash -c "ls \"$(hatch env find hatch-test.py${{ matrix.python }})/bin/python\""
     - name: test
       run: bash -c "\"$(hatch env find hatch-test.py${{ matrix.python }})/bin/python\" -m pytest -s -vv"
