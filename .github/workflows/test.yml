@@ -36,5 +36,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install Hatch
       uses: pypa/hatch@install
+    - run: which hatch
+    - run: sudo echo $PATH
     - name: test
       run: sudo hatch test -c -py ${{ matrix.python }}
