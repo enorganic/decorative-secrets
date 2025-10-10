@@ -37,4 +37,4 @@ jobs:
     - name: Install Hatch
       uses: pypa/hatch@install
     - name: test
-      run: hatch test -py ${{ matrix.python }}
+      run: sudo hatch test -py ${{ matrix.python }}
