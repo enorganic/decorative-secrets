@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "decorative-secrets"
+version = "0.0.0"
+description = "Decorators for Multi-Source Secret Retrieval"
+readme = "README.md"
+license = "MIT"
+requires-python = "~=3.9"
+authors = [{ email = "david@belais.me" }]
+keywords = ["decorators", "secrets"]
+dependencies = []
+
+[project.optional-dependencies]
+databricks = ["databricks-sdk~=0.67"]
+aws = ["boto3~=1.4"]
+onepassword = ["onepassword-sdk~=0.3"]
+google = ["google-cloud-secret-manager~=2.24"]
+azure = ["azure-keyvault-secrets~=4.10"]
+all = ["boto3~=1.4", "databricks-sdk~=0.67", "onepassword-sdk~=0.3", "google-cloud-secret-manager~=2.24", "azure-keyvault-secrets~=4.10"]
+
+[project.scripts]
+decorative-secrets = "decorative_secrets.__main__:main"
+
+[project.urls]
+Documentation = "https://enorganic.github.io/decorative-secrets"
+Repository = "https://github.com/enorganic/decorative-secrets"
+
+[tool.hatch.build.targets.sdist]
+packages = ["src/decorative_secrets"]
+
+[tool.hatch.build.targets.sdist.sources]
+src = ""
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/decorative_secrets"]
+
+[tool.hatch.build.targets.wheel.sources]
+src = ""
+
+[tool.hatch.envs.default]
+python = "3.9"
+dependencies = ["mypy", "pytest", "dependence"]
+pre-install-commands = ["uv pip install --upgrade pip"]
+post-install-commands = [
+    "hatch run mypy --install-types --non-interactive || echo",
+]
+
+[tool.hatch.envs.docs]
+template = "docs"
+python = "3.13"
+dependencies = ["mkdocs-material", "mkdocstrings[python]", "black", "dependence"]
+
+[tool.hatch.envs.hatch-test]
+template = "hatch-test"
+extra-dependencies = ["dependence"]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+ignore = ["F842", "INP001"]
+extend-select = ["E", "F", "UP", "B", "SIM", "I", "C", "N"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 20
+
+[tool.black]
+line-length = 79
+target-version = ["py39", "py310", "py311", "py312", "py313"]
+
+[tool.mypy]
+python_version = "3.9"
+files = ["src", "tests"]
+exclude = []
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.coverage.run]
+include = ["src/**/*.py"]
+# omit = ["src/**/_*.py"]
+
+[tool.coverage.paths]
+source = ["src/**"]
+
+[tool.coverage.report]
+fail_under = 1
