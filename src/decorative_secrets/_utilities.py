@@ -76,15 +76,6 @@ def install_brew() -> None:
         ),
         shell=True,  # noqa: S602
     )
-    check_call(
-        (
-            "sudo",
-            which("apt-get") or "apt-get",
-            "install",
-            "build-essential",
-        ),
-        shell=True,  # noqa: S602
-    )
 
 
 @cache
