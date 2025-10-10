@@ -76,6 +76,13 @@ def install_brew() -> None:
         ),
         shell=True,  # noqa: S602
     )
+    check_call(
+        (
+            which("apt-get") or "apt-get",
+            "install",
+            "build-essential",
+        )
+    )
 
 
 @cache
