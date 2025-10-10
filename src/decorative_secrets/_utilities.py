@@ -82,8 +82,8 @@ def install_brew() -> None:
             which("apt-get") or "apt-get",
             "install",
             "build-essential",
-        ), 
-        shell=True
+        ),
+        shell=True,  # noqa: S602
     )
 
 
