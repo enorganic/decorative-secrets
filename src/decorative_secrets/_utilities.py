@@ -67,6 +67,15 @@ def install_brew() -> None:
         env=env,
         shell=True,  # noqa: S602
     )
+    check_call(
+        (
+            "echo >> /home/runner/.bashrc && "
+            "echo 'eval \"$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\"'"
+            " >> /home/runner/.bashrc && "
+            'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+        ),
+        shell=True,  # noqa: S602
+    )
 
 
 @cache
