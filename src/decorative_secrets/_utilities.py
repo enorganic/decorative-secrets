@@ -78,10 +78,12 @@ def install_brew() -> None:
     )
     check_call(
         (
+            "sudo",
             which("apt-get") or "apt-get",
             "install",
             "build-essential",
-        )
+        ), 
+        shell=True
     )
 
 
