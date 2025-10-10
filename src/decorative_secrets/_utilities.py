@@ -69,7 +69,7 @@ def install_brew() -> None:
     )
     check_call(
         (
-            "echo >> /home/runner/.bashrc && "
+            "echo >> /home/runner/.bashrc && "  # noqa: S607
             "echo 'eval \"$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\"'"
             " >> /home/runner/.bashrc && "
             'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
