@@ -55,14 +55,18 @@ def check_output(
             print("$", "cd", cwd, "&&", list2cmdline(args))  # noqa: T201
         else:
             print("$", list2cmdline(args))  # noqa: T201
-    output: str = run(
-        args,
-        stdout=PIPE,
-        stderr=DEVNULL,
-        check=True,
-        cwd=cwd or None,
-        input=input,
-    ).stdout.decode("utf-8", errors="ignore")
+    output: str = (
+        run(
+            args,
+            stdout=PIPE,
+            stderr=DEVNULL,
+            check=True,
+            cwd=cwd or None,
+            input=input,
+        )
+        .stdout.rstrip()
+        .decode("utf-8", errors="ignore")
+    )
     if echo:
         print(output)  # noqa: T201
     return output

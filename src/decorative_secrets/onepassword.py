@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from functools import partial
+from importlib.metadata import distribution
 from typing import TYPE_CHECKING, Any
 from urllib.parse import ParseResult, urlparse
 
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     )
 
 _INTEGRATION_NAME: str = "decorative-secrets"
+_INTEGRATION_VERSION: str = distribution("decorative-secrets").version
 
 
 def _resolve_auth_arguments(
@@ -64,7 +66,9 @@ async def _async_resolve_resource(token: str, resource: str) -> str:
     `onepassword-sdk` library.
     """
     client: Client = await Client.authenticate(
-        auth=token, integration_name=_INTEGRATION_NAME
+        auth=token,
+        integration_name=_INTEGRATION_NAME,
+        integration_version=_INTEGRATION_VERSION,
     )
     secrets: Secrets = client.secrets
     return await secrets.resolve(resource)
@@ -72,7 +76,7 @@ async def _async_resolve_resource(token: str, resource: str) -> str:
 
 async def _async_resolve_connect_resource(
     token: str, host: str, resource: str
-) -> str:
+) -> str:  # pragma: no cover
     connect_client: AsyncClient = AsyncClient(
         url=host,
         token=token,
@@ -89,7 +93,9 @@ async def _async_resolve_connect_resource(
     raise KeyError(resource)
 
 
-def _resolve_connect_resource(token: str, host: str, resource: str) -> str:
+def _resolve_connect_resource(
+    token: str, host: str, resource: str
+) -> str:  # pragma: no cover
     connect_client: ConnectClient = ConnectClient(
         url=host,
         token=token,

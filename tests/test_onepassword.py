@@ -2,6 +2,7 @@ import asyncio
 import os
 
 from decorative_secrets.onepassword import (
+    _parse_resource,
     _resolve_auth_arguments,
     apply_onepassword_arguments,
     async_read_onepassword_secret,
@@ -53,7 +54,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             "databricks_client_secret": databricks_client_secret,
         }
 
-    assert infer_databricks_credentials(
+    credentials: dict[str, str] = infer_databricks_credentials(
         databricks_host_onepassword=(
             f"op://{onepassword_vault}/Databricks Client/hostname"
         ),
@@ -64,6 +65,30 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             f"op://{onepassword_vault}/Databricks Client/credential"
         ),
     )
+
+    env: dict[str, str] = os.environ.copy()
+    try:
+        token: str = read_onepassword_secret(
+            "op://decorative-secrets-test/sb466kar2ifqheowaprjqvwn7y/credential"
+        )
+        os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = token
+        assert (
+            infer_databricks_credentials(
+                databricks_host_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/hostname"
+                ),
+                databricks_client_id_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/username"
+                ),
+                databricks_client_secret_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/credential"
+                ),
+            )
+            == credentials
+        )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
 
 
 def test_resolve_auth_arguments() -> None:
@@ -114,3 +139,14 @@ def test_resolve_auth_arguments() -> None:
         # Restore original environment variables
         os.environ.clear()
         os.environ.update(env)
+
+
+def test_parse_resource() -> None:
+    """
+    Test resource parsing.
+    """
+    assert _parse_resource("op://My Vault/My Item/fieldname") == (
+        "My Vault",
+        "My Item",
+        "fieldname",
+    )
