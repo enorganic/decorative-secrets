@@ -20,6 +20,7 @@ keywords = [
 ]
 dependencies = [
     "nest-asyncio~=1.6",
+    "async-lru~=2.0",
 ]
 
 [project.optional-dependencies]

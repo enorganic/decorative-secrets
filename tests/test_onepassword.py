@@ -69,7 +69,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
     env: dict[str, str] = os.environ.copy()
     try:
         token: str = read_onepassword_secret(
-            "op://decorative-secrets-test/sb466kar2ifqheowaprjqvwn7y/credential"
+            f"op://{onepassword_vault}/sb466kar2ifqheowaprjqvwn7y/credential"
         )
         os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = token
         assert (

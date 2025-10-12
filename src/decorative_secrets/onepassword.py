@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import os
-from functools import partial
+from functools import cache, partial
 from importlib.metadata import distribution
 from typing import TYPE_CHECKING, Any
 from urllib.parse import ParseResult, urlparse
 
+from async_lru import alru_cache
 from onepassword.client import Client  # type: ignore[import-untyped]
 from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
     AsyncClient,
@@ -113,6 +114,7 @@ def _resolve_connect_resource(
     raise KeyError(resource)
 
 
+@alru_cache(maxsize=None)
 async def async_read_onepassword_secret(
     resource: str,
     account: str | None = None,
@@ -152,6 +154,7 @@ async def async_read_onepassword_secret(
     )
 
 
+@cache
 def read_onepassword_secret(
     resource: str,
     account: str | None = None,

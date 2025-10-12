@@ -480,7 +480,7 @@ def apply_callback_arguments(  # noqa: C901
             # have an explicitly passed value, execute the callback
             unused_callback_parameter_names: set[str] = set(
                 callback_parameter_names.values()
-            )
+            ) & set(kwargs.keys())
             parameter_name: str
             for parameter_name in set(callback_parameter_names.keys()) - set(
                 kwargs.keys()
