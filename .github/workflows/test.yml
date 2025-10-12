@@ -10,6 +10,8 @@ on:
     - pyproject.toml
     - tests/**
     - .github/workflows/test.yml
+env:
+  OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
 jobs:
   lint:
     runs-on: ubuntu-latest
