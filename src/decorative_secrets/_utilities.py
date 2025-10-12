@@ -166,7 +166,7 @@ def which_op() -> str:
 
 
 @cache
-def op_signin(account: str | None) -> str:
+def op_signin(account: str | None = None) -> str:
     """
     Sign in to 1Password using the CLI if not already signed in.
     """
@@ -175,6 +175,7 @@ def op_signin(account: str | None) -> str:
         account = os.getenv("OP_ACCOUNT")
     check_output(
         (op, "signin", "--account", account) if account else (op, "signin"),
+        input=None if account else b"\n\n",
     )
     return op
 

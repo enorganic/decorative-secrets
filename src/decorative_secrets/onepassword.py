@@ -19,6 +19,7 @@ from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
 from decorative_secrets._utilities import (  # type: ignore[import-untyped]
     apply_callback_arguments,
     check_output,
+    which_op,
 )
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ async def async_read_onepassword_secret(
             return await _async_resolve_connect_resource(token, host, resource)
         return await _async_resolve_resource(token, resource)
     return check_output(
-        ("op", "read")
+        (which_op(), "read")
         + (("--account", account) if account else ())
         + (("--session", token) if token else ())
         + (resource,)
@@ -182,7 +183,7 @@ def read_onepassword_secret(
             return _resolve_connect_resource(token, host, resource)
         return asyncio.run(_async_resolve_resource(token, resource))
     return check_output(
-        ("op", "read")
+        (which_op(), "read")
         + (("--account", account) if account else ())
         + (("--session", token) if token else ())
         + (resource,)
