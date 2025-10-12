@@ -145,7 +145,14 @@ def install_op() -> None:
     """
     message: str
     if sys.platform.startswith("win"):
-        check_output((which("winget") or "winget", "install", "1password-cli"))
+        try:
+            check_output((which_winget(), "install", "1password-cli"))
+        except (
+            CalledProcessError,
+            FileNotFoundError,
+            WinGetNotInstalledError,
+        ) as error:
+            raise OnePasswordCommandLineInterfaceNotInstalledError from error
     elif sys.platform == "darwin":
         try:
             check_output((which_brew(), "install", "1password-cli"))
