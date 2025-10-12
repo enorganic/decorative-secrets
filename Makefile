@@ -1,6 +1,6 @@
 SHELL := bash
 .PHONY: docs
-MINIMUM_PYTHON_VERSION := 3.9
+MINIMUM_PYTHON_VERSION := 3.10
 
 # Create all environments
 install:
@@ -28,18 +28,22 @@ upgrade:
 	hatch run dependence upgrade\
 	 --include-pointer /tool/hatch/envs/default\
 	 --include-pointer /project\
+	 -aen all\
 	 pyproject.toml && \
 	hatch run docs:dependence upgrade\
 	 --include-pointer /tool/hatch/envs/docs\
 	 --include-pointer /project\
+	 -aen all\
 	 pyproject.toml && \
 	hatch run hatch-static-analysis:dependence upgrade\
 	 --include-pointer /tool/hatch/envs/hatch-static-analysis\
 	 --include-pointer /project\
+	 -aen all\
 	 pyproject.toml && \
 	hatch run hatch-test.py$(MINIMUM_PYTHON_VERSION):dependence upgrade\
 	 --include-pointer /tool/hatch/envs/hatch-test\
 	 --include-pointer /project\
+	 -aen all\
 	 pyproject.toml
 
 # This will align project dependency versions with those installed in the
@@ -51,6 +55,7 @@ requirements:
 	hatch run dependence update\
 	 --include-pointer /tool/hatch/envs/default\
 	 --include-pointer /project\
+	 -aen all\
 	 pyproject.toml && \
 	hatch run docs:dependence update pyproject.toml --include-pointer /tool/hatch/envs/docs && \
 	hatch run hatch-test.py$(MINIMUM_PYTHON_VERSION):dependence update pyproject.toml --include-pointer /tool/hatch/envs/hatch-test

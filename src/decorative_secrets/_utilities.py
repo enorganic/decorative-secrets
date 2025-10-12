@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
-from functools import cache
+from collections import deque
+from collections.abc import Coroutine
+from contextlib import suppress
+from functools import cache, update_wrapper, wraps
+from inspect import Parameter, Signature, signature
+from io import TextIOWrapper
 from shutil import which
 from subprocess import (
     DEVNULL,
@@ -12,13 +18,20 @@ from subprocess import (
     list2cmdline,
     run,
 )
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from urllib.request import urlopen
+
+import nest_asyncio  # type: ignore[import-untyped]
 
 from decorative_secrets.errors import (
+    DatabricksCLINotInstalledError,
+    HomebrewNotInstalledError,
     OnePasswordCommandLineInterfaceNotInstalledError,
+    WinGetNotInstalledError,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
 
@@ -55,37 +68,35 @@ def check_output(
     return output
 
 
+HOMEBREW_INSTALL_SH: str = (
+    "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+)
+
+
 def install_brew() -> None:
     """
-    Install Homebrew on macOS if not already installed.
+    Install Homebrew on macOS or linux if not already installed.
     """
     env: dict[str, str] = os.environ.copy()
     env["NONINTERACTIVE"] = "1"
-    check_call(
-        (
-            "/bin/bash -c "
-            '"$(curl -fsSL '
-            "https://raw.githubusercontent.com"
-            '/Homebrew/install/HEAD/install.sh)"'
-        ),
-        env=env,
-        shell=True,  # noqa: S602
-    )
-    check_call(
-        (
-            "echo >> /home/runner/.bashrc && "  # noqa: S607
-            "echo 'eval \"$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\"'"
-            " >> /home/runner/.bashrc && "
-            'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
-        ),
-        shell=True,  # noqa: S602
-    )
+    bash: str = which("bash") or "/bin/bash"
+    with TextIOWrapper(
+        urlopen(HOMEBREW_INSTALL_SH)  # noqa: S310
+    ) as response_io:
+        try:
+            check_call(
+                (bash, "-c", response_io.read()),
+                env=env,
+            )
+        except CalledProcessError as error:
+            # This is usually because the script requires `sudo` access to run
+            raise HomebrewNotInstalledError from error
 
 
 @cache
 def which_brew() -> str:
     """
-    Find the `brew` executable, or install Homebrew if not found.
+    Find the `brew` executable on macOS, or install Homebrew if not found.
     """
     brew: str | None
     brew = which("brew") or "brew"
@@ -103,7 +114,25 @@ def which_brew() -> str:
                 brew = "/home/linuxbrew/.linuxbrew/bin/brew"
                 if not os.path.exists(brew):
                     brew = "brew"
+        try:
+            check_output((brew, "--version"))
+        except (CalledProcessError, FileNotFoundError) as error:
+            raise HomebrewNotInstalledError from error
     return brew
+
+
+@cache
+def which_winget() -> str | None:
+    """
+    Find the `winget` executable on Windows, or raise an error if not found.
+    """
+    winget: str = which("winget") or "winget"
+    try:
+        check_output((winget, "--version"))
+    except (CalledProcessError, FileNotFoundError) as error:
+        raise WinGetNotInstalledError from error
+    else:
+        return winget
 
 
 def install_op() -> None:
@@ -144,3 +173,368 @@ def op_signin(account: str | None) -> str:
         (op, "signin", "--account", account) if account else (op, "signin"),
     )
     return op
+
+
+def install_sh_databricks_cli() -> None:
+    """
+    Install the Databricks CLI using the install script.
+    """
+    with urlopen(
+        "https://raw.githubusercontent.com/databricks/setup-cli/"
+        "main/install.sh"
+    ) as install_io:
+        sh: str = which("sh") or "sh"
+        try:
+            check_output((sh,), input=install_io.read())
+        except (CalledProcessError, FileNotFoundError) as error:
+            if (
+                (not isinstance(error, CalledProcessError))
+                or (not error.stdout)
+                or (
+                    (b"already exists" not in error.stdout)
+                    and (b"'sudo'" not in error.stdout)
+                )
+            ):
+                # This is usually because the script requires `sudo` access to
+                # run
+                raise DatabricksCLINotInstalledError from error
+
+
+def install_databricks_cli() -> None:
+    """
+    Install the Databricks CLI.
+    """
+    if sys.platform.startswith("win"):
+        winget: str | None = which_winget()
+        if winget:
+            check_output((winget, "search", "DatabricksCLI"))
+            check_output((winget, "install", "Databricks.DatabricksCLI"))
+            return
+    elif sys.platform == "darwin":
+        brew: str
+        # Here we suppress the HomebrewNotInstalledError because we
+        # can still attempt to install the Databricks CLI using
+        # the install script
+        with suppress(HomebrewNotInstalledError):
+            brew = which_brew()
+            if brew:
+                with suppress(CalledProcessError):
+                    check_output((brew, "tap", "databricks/tap"))
+                check_output((brew, "install", "databricks"))
+                return
+    install_sh_databricks_cli()
+
+
+def which_databricks() -> str:
+    """
+    Find the `databricks` executable, or install the Databricks CLI if not
+    found.
+    """
+    databricks: str = which("databricks") or "databricks"
+    try:
+        check_output((databricks, "--version"))
+    except (CalledProcessError, FileNotFoundError):
+        install_databricks_cli()
+        databricks = which("databricks") or "databricks"
+    return databricks
+
+
+@cache
+def databricks_auth_login(host: str | None = None) -> None:
+    """
+    Log in to Databricks using the CLI if not already logged in.
+    """
+    if host is None:
+        host = os.getenv("DATABRICKS_HOST")
+    databricks = which_databricks()
+    if host:
+        check_output((databricks, "auth", "login", host), input=b"\n")
+    else:
+        # Automatically select the default/first profile if no host
+        # is specified
+        check_output((databricks, "auth", "login"), input=b"\n\n")
+
+
+def as_tuple(
+    user_function: Callable[..., Iterable[Any]],
+) -> Callable[..., tuple[Any, ...]]:
+    """
+    This is a decorator which will return an iterable as a tuple.
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, ...]:
+        return tuple(user_function(*args, **kwargs) or ())
+
+    return update_wrapper(wrapper, user_function)
+
+
+@as_tuple
+def merge_function_signature_args_kwargs(
+    function_signature: Signature, args: Iterable[Any], kwargs: dict[str, Any]
+) -> Iterable[Any]:
+    """
+    This function merges positional/keyword arguments for a function
+    into the keyword argument dictionary, and returns any arguments which
+    are positional-only.
+    """
+    value: Any
+    parameter: Parameter
+    if args:
+        for parameter, value in zip(
+            function_signature.parameters.values(), args, strict=False
+        ):
+            if parameter.kind == Parameter.POSITIONAL_OR_KEYWORD:
+                kwargs[parameter.name] = value
+            else:
+                yield value
+
+
+def remove_function_signature_inapplicable_kwargs(
+    function_signature: Signature, kwargs: dict[str, Any]
+) -> None:
+    def get_parameter_name(parameter_: Parameter) -> str:
+        return parameter_.name
+
+    key: str
+    for key in set(kwargs.keys()) - set(
+        map(
+            get_parameter_name,
+            function_signature.parameters.values(),
+        )
+    ):
+        del kwargs[key]
+
+
+def get_function_signature_parameter_value_or_default(
+    function_signature: Signature,
+    parameter_name: str,
+    kwargs: dict[str, Any],
+    default: Any,
+) -> Any:
+    value: Any = default
+    if parameter_name and (parameter_name in kwargs):
+        value = kwargs[parameter_name] or default
+    elif parameter_name in function_signature.parameters:
+        value = (
+            function_signature.parameters[parameter_name].default or default
+        )
+    return value
+
+
+def get_running_loop() -> asyncio.AbstractEventLoop | None:
+    """
+    Get the currently running event loop, or None if there is none.
+    """
+    loop: asyncio.AbstractEventLoop | None = None
+    with suppress(RuntimeError):
+        loop = asyncio.get_running_loop()
+    return loop
+
+
+def asyncio_run(coroutine: Coroutine) -> Any:
+    """
+    Run a coroutine, applying nest_asyncio if necessary.
+    """
+    loop: asyncio.AbstractEventLoop | None = get_running_loop()
+    if loop is None:
+        return asyncio.run(coroutine)
+    nest_asyncio.apply(loop)
+    return asyncio.run(coroutine)
+
+
+def get_original_function_signature(
+    function: Callable[..., Any],
+) -> Signature:
+    """
+    This function retrieves the original signature of a decorated function.
+    """
+    while hasattr(function, "__wrapped__"):
+        function = function.__wrapped__
+    return signature(function)
+
+
+def apply_callback_arguments(  # noqa: C901
+    callback: Callable[..., Any] | None = None,
+    async_callback: Callable[..., Any] | None = None,
+    callback_parameter_names: Mapping[str, str]
+    | Iterable[tuple[str, str]] = (),
+    **callback_parameter_names_kwargs: str,
+) -> Callable[..., Callable[..., Any]]:
+    """
+    This decorator maps parameter names to callback arguments.
+    Each key represents the name of a parameter in the decorated function
+    which accepts an explicit input, and the corresponding mapped value is
+    an argument to pass to the provided callback function(s).
+
+    Parameters:
+        callback: A synchronous function which accepts one argument, and
+            returns a value to be passed to a parameter of the decorated
+            function.
+        async_callback: An asynchronous function which accepts one argument,
+            and returns a value to be passed to a parameter of the decorated
+            function.
+        callback_parameter_names:
+            A mapping of static parameter names to callback parameter names.
+        callback_parameter_names_kwargs: Synonymous with
+            `callback_parameter_names`. When both are provided,
+            `callback_parameter_names_kwargs` is updated from
+            `callback_parameter_names` in order to merge the
+            two.
+
+    Returns:
+        A decorator function which retrieves argument values by
+            passing callback function arguments to the callback, and
+            applying the output to their mapped static parameters.
+
+    Examples:
+        >>> @apply_callback_arguments(
+        ...     lambda x: x * 2,
+        ...     {
+        ...         "x": "x_lookup_args"
+        ...     },
+        ... )
+        ... def return_value(
+        ...     x: int
+        ...     | None = None,
+        ...     x_lookup_args: tuple[
+        ...         Sequence[
+        ...             int
+        ...         ],
+        ...         Mapping[
+        ...             str, int
+        ...         ],
+        ...     ]
+        ...     | None = None,
+        ... ) -> int:
+        ...     return x**2
+        >>> return_value(
+        ...     x_lookup_args=(
+        ...         3,
+        ...         None,
+        ...     )
+        ... )
+        36
+    """
+    message: str
+    if (callback is not None) and asyncio.iscoroutinefunction(callback):
+        raise TypeError(callback)
+    if (async_callback is not None) and not asyncio.iscoroutinefunction(
+        async_callback
+    ):
+        raise TypeError(async_callback)
+    if callback is None:
+        if async_callback is None:
+            message = (
+                "Either a `callback` or an `async_callback` argument must be "
+                "provided."
+            )
+            raise ValueError(message)
+
+        def callback(argument: Any) -> Any:
+            return asyncio_run(async_callback(argument))
+
+    if async_callback is None:
+
+        async def async_callback(argument: Any) -> Any:
+            await asyncio.sleep(0)
+            return callback(argument)
+
+    if not isinstance(callback_parameter_names, dict):
+        callback_parameter_names = dict(callback_parameter_names)
+    if callback_parameter_names_kwargs:
+        callback_parameter_names.update(**callback_parameter_names_kwargs)
+
+    def decorating_function(
+        function: Callable[..., Any],
+    ) -> Callable[..., Any]:
+        function_signature: Signature = get_original_function_signature(
+            function
+        )
+
+        def get_args_kwargs(
+            *args: Any, **kwargs: Any
+        ) -> tuple[tuple[Any, ...], dict[str, Any]]:
+            """
+            This function performs lookups for any parameters for which an
+            argument is not passed explicitly.
+            """
+            # First we consolidate the keyword arguments with any arguments
+            # which are passed to parameters which can be either positional
+            # *or* keyword arguments, and were passed as positional arguments
+            args = merge_function_signature_args_kwargs(
+                function_signature, args, kwargs
+            )
+            # For any arguments where we have callback arguments and do not
+            # have an explicitly passed value, execute the callback
+            unused_callback_parameter_names: set[str] = set(
+                callback_parameter_names.values()
+            )
+            parameter_name: str
+            for parameter_name in set(callback_parameter_names.keys()) - set(
+                kwargs.keys()
+            ):
+                callback_parameter_name: str = callback_parameter_names[
+                    parameter_name
+                ]
+                unused_callback_parameter_names.discard(
+                    callback_parameter_name
+                )
+                callback_argument: Any = kwargs.pop(
+                    callback_parameter_name, None
+                )
+                parameter: Parameter | None = (
+                    function_signature.parameters.get(parameter_name)
+                )
+                callback_: Callable[..., Any] = callback
+                if (
+                    (parameter is not None)
+                    and (isinstance(parameter.annotation, type))
+                    and issubclass(Coroutine, parameter.annotation)
+                ):
+                    callback_ = async_callback
+                if callback_argument is not None:
+                    kwargs[parameter_name] = callback_(callback_argument)
+                elif callback_parameter_name in function_signature.parameters:
+                    default: tuple[Sequence[Any], Mapping[str, Any]] | None = (
+                        function_signature.parameters[
+                            callback_parameter_name
+                        ].default
+                    )
+                    if default is not None:
+                        kwargs[parameter_name] = callback_(default)
+            # Remove unused callback arguments
+            deque(map(kwargs.pop, unused_callback_parameter_names), maxlen=0)
+            # Remove arguments which do not correspond to
+            # any of the function's parameter names
+            remove_function_signature_inapplicable_kwargs(
+                function_signature, kwargs
+            )
+            return (args, kwargs)
+
+        if asyncio.iscoroutinefunction(function):
+
+            @wraps(function)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                """
+                This function wraps the original and performs lookups for
+                any parameters for which an argument is not passed
+                """
+                args, kwargs = get_args_kwargs(*args, **kwargs)
+                # Execute the wrapped function
+                return await function(*args, **kwargs)
+
+        else:
+
+            @wraps(function)
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                """
+                This function wraps the original and performs lookups for
+                any parameters for which an argument is not passed
+                """
+                args, kwargs = get_args_kwargs(*args, **kwargs)
+                # Execute the wrapped function
+                return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorating_function

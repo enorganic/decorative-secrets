@@ -1,1 +1,296 @@
 from __future__ import annotations
+
+import asyncio
+import os
+from functools import partial
+from typing import TYPE_CHECKING, Any
+from urllib.parse import ParseResult, urlparse
+
+from onepassword.client import Client  # type: ignore[import-untyped]
+from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
+    AsyncClient,
+    Item,
+)
+from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
+    Client as ConnectClient,
+)
+
+from decorative_secrets._utilities import (  # type: ignore[import-untyped]
+    apply_callback_arguments,
+    check_output,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine, Iterable, Mapping
+
+    from onepassword import Secrets  # type: ignore[import-untyped]
+    from onepasswordconnectsdk.models.field import (  # type: ignore[import-untyped]
+        Field,
+    )
+
+_INTEGRATION_NAME: str = "decorative-secrets"
+
+
+def _resolve_auth_arguments(
+    account: str | None = None,
+    token: str | None = None,
+    host: str | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    """
+    Parameters:
+        account:
+        token:
+        host:
+    """
+    if account is None:
+        account = os.getenv("OP_ACCOUNT")
+    if token is None:
+        token = os.getenv("OP_SERVICE_ACCOUNT_TOKEN")
+    if host is None:
+        host = os.getenv("OP_CONNECT_HOST")
+    if (token is None) or (host is not None):
+        token = os.getenv("OP_CONNECT_TOKEN") or token
+    return account, token, host
+
+
+def _parse_resource(resource: str) -> tuple[str, str, str]:
+    parse_result: ParseResult = urlparse(resource)
+    return (parse_result.netloc, *parse_result.path[1:].partition("/")[::2])
+
+
+async def _async_resolve_resource(token: str, resource: str) -> str:
+    """
+    Asynchronously resolve a 1Password resource using the
+    `onepassword-sdk` library.
+    """
+    client: Client = await Client.authenticate(
+        auth=token, integration_name=_INTEGRATION_NAME
+    )
+    secrets: Secrets = client.secrets
+    return await secrets.resolve(resource)
+
+
+async def _async_resolve_connect_resource(
+    token: str, host: str, resource: str
+) -> str:
+    connect_client: AsyncClient = AsyncClient(
+        url=host,
+        token=token,
+    )
+    vault: str
+    item_name: str
+    field_id: str
+    vault, item_name, field_id = _parse_resource(resource)
+    item: Item = await connect_client.get_item(item=item_name, vault=vault)
+    field: Field
+    for field in item.fields:
+        if field.id == field_id:
+            return field.value
+    raise KeyError(resource)
+
+
+def _resolve_connect_resource(token: str, host: str, resource: str) -> str:
+    connect_client: ConnectClient = ConnectClient(
+        url=host,
+        token=token,
+    )
+    vault: str
+    item_name: str
+    field_id: str
+    vault, item_name, field_id = _parse_resource(resource)
+    item: Item = connect_client.get_item(item=item_name, vault=vault)
+    field: Field
+    for field in item.fields:
+        if field.id == field_id:
+            return field.value
+    raise KeyError(resource)
+
+
+async def async_read_onepassword_secret(
+    resource: str,
+    account: str | None = None,
+    token: str | None = None,
+    host: str | None = None,
+) -> str:
+    """
+    Asynchronously read a secret from 1Password using either the
+    `onepassword-sdk` or `onepasswordconnectsdk` libraries, or the `op`
+    executable (1password CLI), depending on the provided arguments and
+    environment variables.
+
+    Parameters:
+        resource: A 1Password secret resource path. For example:
+            "op://Vault Name/Client Secret Item Name/credential"
+        account: A 1Password account URL. For example, individuals and families
+            will use "my.1password.com", while teams and businesses will use
+            a custom subdomain. This is only necessary when using
+            the 1Password CLI where multiple accounts are configured.
+        token: A 1Password or 1Password connect service account token.
+        host: A 1Password Connect host URL. This is required when using
+            self-hosted 1Password Connect.
+
+    Returns:
+        The resolved secret value.
+    """
+    account, token, host = _resolve_auth_arguments(account, token, host)
+    if token:
+        if host:
+            return await _async_resolve_connect_resource(token, host, resource)
+        return await _async_resolve_resource(token, resource)
+    return check_output(
+        ("op", "read")
+        + (("--account", account) if account else ())
+        + (("--session", token) if token else ())
+        + (resource,)
+    )
+
+
+def read_onepassword_secret(
+    resource: str,
+    account: str | None = None,
+    token: str | None = None,
+    host: str | None = None,
+) -> str:
+    """
+    Read a secret from 1Password using either the `onepassword-sdk` or
+    `onepasswordconnectsdk` libraries, or the `op` executable (1password CLI),
+    depending on the provided arguments and environment variables.
+
+    Parameters:
+        resource: A 1Password secret resource path. For example:
+            "op://Vault Name/Client Secret Item Name/credential"
+        account: A 1Password account URL. For example, individuals and families
+            will use "my.1password.com", while teams and businesses will use
+            a custom subdomain. This is only necessary when using
+            the 1Password CLI where multiple accounts are configured.
+        token: A 1Password or 1Password connect service account token.
+        host: A 1Password Connect host URL. This is required when using
+            self-hosted 1Password Connect.
+
+    Returns:
+        The resolved secret value.
+    """
+    account, token, host = _resolve_auth_arguments(account, token, host)
+    if token:
+        if host:
+            return _resolve_connect_resource(token, host, resource)
+        return asyncio.run(_async_resolve_resource(token, resource))
+    return check_output(
+        ("op", "read")
+        + (("--account", account) if account else ())
+        + (("--session", token) if token else ())
+        + (resource,)
+    )
+
+
+def apply_onepassword_arguments(
+    onepassword_resource_arguments: (
+        Mapping[str, str] | Iterable[tuple[str, str]]
+    ) = (),
+    onepassword_account: str | None = None,
+    onepassword_token: str | None = None,
+    onepassword_connect_host: str | None = None,
+    **kwargs: str,
+) -> Callable:
+    """
+    This decorator maps parameter names to 1Password resources.
+    Each key represents the name of a parameter in the decorated function
+    which accepts an explicit input, and the corresponding mapped value is a
+    parameter name accepting a resource path with which to lookup a secret
+    to pass to the mapped parameter in lieu of an explicitly provided
+    argument.
+
+    Parameters:
+        onepassword_resource_arguments:
+            A mapping of static parameter names to the parameter names
+            of arguments accepting 1Password resource paths from which to
+            retrieve the value when the key argument is not explicitly
+            provided.
+        onepassword_account: A 1Password account URL. For example, individuals
+            and families will use "my.1password.com", while teams and
+            businesses will use a custom subdomain. If not provided, the
+            `OP_ACCOUNT` environment variable will be used, if set. This is
+            only necessary when using the 1Password CLI where multiple
+            accounts are configured, and if no token is provided or inferred
+            from an environment variable.
+        onepassword_token: A 1Password or 1Password connect service account
+            token. If not provided, the `OP_SERVICE_ACCOUNT_TOKEN` or
+            `OP_CONNECT_TOKEN` environment variables will be used, if set.
+        onepassword_connect_host: A 1Password Connect host URL. If not
+            provided, the `OP_CONNECT_HOST` environment variable will be used,
+            if set. This is required when using a self-hosted 1Password
+            Connect server.
+        kwargs: In lieu of passing a dictionary to
+            `onepassword_resource_arguments`, the same mapping may be
+            provided as keyword arguments.
+
+    Example:
+        from functools import cache
+        from decorative_secrets.onepassword import apply_onepassword_arguments
+        from my_client_sdk import Client
+
+        @cache
+        @apply_onepassword_arguments(
+            client_id="client_id_onepassword",
+            client_secret="client_secret_onepassword",
+        )
+        def get_client(
+            client_id: str | None = None,
+            client_secret: str = None,
+            client_id_onepassword: str | None = None,
+            client_secret_onepassword: str | None = None,
+        ) -> Client:
+            return Client(
+                oauth2_client_id=client_id,
+                oauth2_client_secret=client_secret
+            )
+
+
+        client: Client = get_client(
+            client_id_onepassword=(
+                "op://Vault Name/Client ID Item Name/username",
+            ),
+            client_secret_onepassword=(
+                "op://Vault Name/Client Secret Item Name/credential",
+            ),
+        )
+    """
+    read_onepassword_secret_: Callable[..., str] = read_onepassword_secret
+    async_read_onepassword_secret_: Callable[
+        [str, str | None, str | None, str | None], Coroutine[Any, Any, str]
+    ] = async_read_onepassword_secret
+    if (
+        (onepassword_account is not None)
+        or (onepassword_token is not None)
+        or (onepassword_connect_host is not None)
+    ):
+        read_onepassword_secret_ = partial(
+            read_onepassword_secret_,
+            **(
+                {"account": onepassword_account} if onepassword_account else {}
+            ),
+            **({"token": onepassword_token} if onepassword_token else {}),
+            **(
+                {"host": onepassword_connect_host}
+                if onepassword_connect_host
+                else {}
+            ),
+        )
+        async_read_onepassword_secret_ = partial(
+            async_read_onepassword_secret_,
+            **(
+                {"account": onepassword_account} if onepassword_account else {}
+            ),
+            **({"token": onepassword_token} if onepassword_token else {}),
+            **(
+                {"host": onepassword_connect_host}
+                if onepassword_connect_host
+                else {}
+            ),
+        )
+    return apply_callback_arguments(
+        read_onepassword_secret_,
+        async_read_onepassword_secret_,
+        onepassword_resource_arguments,
+        **kwargs,
+    )

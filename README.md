@@ -48,13 +48,13 @@ pip3 install decorative-secrets
 ## Example Usage
 
 ```python
-from functools import lru_cache
+from functools import cache
 from my_app_sdk.client import Client
 from decorative_secrets.environment import apply_environment_arguments
 from decorative_secrets.onepassword import apply_onepassword_arguments
 from decorative_secrets.databricks import apply_databricks_secrets_arguments
 
-@lru_cache
+@cache
 @apply_environment_arguments(
   client_id="client_id_environment_variable",
   client_secret="client_secret_environment_variable",
