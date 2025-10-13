@@ -515,11 +515,16 @@ def apply_databricks_secrets_arguments(
 
     Example:
         ```python
-        from functools import cache
-        from decorative_secrets.databricks import (
-            apply_databricks_secret_arguments
+        from functools import (
+            cache,
         )
-        from my_client_sdk import Client
+        from decorative_secrets.databricks import (
+            apply_databricks_secret_arguments,
+        )
+        from my_client_sdk import (
+            Client,
+        )
+
 
         @cache
         @apply_databricks_secret_arguments(
@@ -527,23 +532,28 @@ def apply_databricks_secrets_arguments(
             client_secret="client_secret_databricks_secret",
         )
         def get_client(
-            client_id: str | None = None,
+            client_id: str
+            | None = None,
             client_secret: str = None,
-            client_id_databricks_secret: str | None = None,
-            client_secret_databricks_secret: str | None = None,
+            client_id_databricks_secret: str
+            | None = None,
+            client_secret_databricks_secret: str
+            | None = None,
         ) -> Client:
             return Client(
                 oauth2_client_id=client_id,
-                oauth2_client_secret=client_secret
+                oauth2_client_secret=client_secret,
             )
 
 
         client: Client = get_client(
             client_id_databricks_secret=(
-                "client", "client-id"
+                "client",
+                "client-id",
             ),
             client_secret_databricks_secret=(
-                "client", "client-secret"
+                "client",
+                "client-secret",
             ),
         )
         ```

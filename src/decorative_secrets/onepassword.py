@@ -268,9 +268,16 @@ def apply_onepassword_arguments(
 
     Example:
         ```python
-        from functools import cache
-        from decorative_secrets.onepassword import apply_onepassword_arguments
-        from my_client_sdk import Client
+        from functools import (
+            cache,
+        )
+        from decorative_secrets.onepassword import (
+            apply_onepassword_arguments,
+        )
+        from my_client_sdk import (
+            Client,
+        )
+
 
         @cache
         @apply_onepassword_arguments(
@@ -278,14 +285,17 @@ def apply_onepassword_arguments(
             client_secret="client_secret_onepassword",
         )
         def get_client(
-            client_id: str | None = None,
+            client_id: str
+            | None = None,
             client_secret: str = None,
-            client_id_onepassword: str | None = None,
-            client_secret_onepassword: str | None = None,
+            client_id_onepassword: str
+            | None = None,
+            client_secret_onepassword: str
+            | None = None,
         ) -> Client:
             return Client(
                 oauth2_client_id=client_id,
-                oauth2_client_secret=client_secret
+                oauth2_client_secret=client_secret,
             )
 
 
