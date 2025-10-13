@@ -18,12 +18,14 @@ from subprocess import (
     list2cmdline,
     run,
 )
+from traceback import format_exception
 from typing import TYPE_CHECKING, Any
 from urllib.request import urlopen
 
 import nest_asyncio  # type: ignore[import-untyped]
 
 from decorative_secrets.errors import (
+    ArgumentsResolutionError,
     DatabricksCLINotInstalledError,
     HomebrewNotInstalledError,
     OnePasswordCommandLineInterfaceNotInstalledError,
@@ -33,6 +35,16 @@ from decorative_secrets.errors import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
+
+
+def get_exception_text() -> str:
+    """
+    When called within an exception, this function returns a text
+    representation of the error matching what is found in
+    `traceback.print_exception`, but is returned as a string value rather than
+    printing.
+    """
+    return "".join(format_exception(*sys.exc_info()))
 
 
 def check_output(
@@ -354,15 +366,27 @@ def asyncio_run(coroutine: Coroutine) -> Any:
     return asyncio.run(coroutine)
 
 
-def get_original_function_signature(
+def unwrap_function(
     function: Callable[..., Any],
-) -> Signature:
+) -> Callable:
     """
-    This function retrieves the original signature of a decorated function.
+    This function retrieves the original, unwrapped, decorated function.
     """
     while hasattr(function, "__wrapped__"):
         function = function.__wrapped__
-    return signature(function)
+    return function
+
+
+_FUNCTIONS_ERRORS: dict[int, dict[str, list[str]]] = {}
+
+
+def _get_errors(function: Callable[..., Any]) -> dict[str, list[str]]:
+    """
+    This function retrieves the current function errors.
+    """
+    function_id: int = id(function)
+    _FUNCTIONS_ERRORS.setdefault(function_id, {})
+    return _FUNCTIONS_ERRORS[function_id]
 
 
 def apply_callback_arguments(  # noqa: C901
@@ -456,20 +480,21 @@ def apply_callback_arguments(  # noqa: C901
     if callback_parameter_names_kwargs:
         callback_parameter_names.update(**callback_parameter_names_kwargs)
 
-    def decorating_function(
+    def decorating_function(  # noqa: C901
         function: Callable[..., Any],
     ) -> Callable[..., Any]:
-        function_signature: Signature = get_original_function_signature(
-            function
-        )
+        original_function: Callable[..., Any] = unwrap_function(function)
+        function_signature: Signature = signature(original_function)
 
-        def get_args_kwargs(
+        def get_args_kwargs(  # noqa: C901
             *args: Any, **kwargs: Any
         ) -> tuple[tuple[Any, ...], dict[str, Any]]:
             """
             This function performs lookups for any parameters for which an
             argument is not passed explicitly.
             """
+            # Capture errors
+            errors: dict[str, list[str]] = _get_errors(original_function)
             # First we consolidate the keyword arguments with any arguments
             # which are passed to parameters which can be either positional
             # *or* keyword arguments, and were passed as positional arguments
@@ -505,15 +530,46 @@ def apply_callback_arguments(  # noqa: C901
                 ):
                     callback_ = async_callback
                 if callback_argument is not None:
-                    kwargs[parameter_name] = callback_(callback_argument)
+                    try:
+                        kwargs[parameter_name] = callback_(callback_argument)
+                        # Clear preceding errors for this parameter
+                        errors.pop(parameter_name, None)
+                    except Exception:  # noqa: BLE001
+                        errors.setdefault(parameter_name, [])
+                        errors[parameter_name].append(get_exception_text())
                 elif callback_parameter_name in function_signature.parameters:
                     default: tuple[Sequence[Any], Mapping[str, Any]] | None = (
                         function_signature.parameters[
                             callback_parameter_name
                         ].default
                     )
-                    if default is not None:
-                        kwargs[parameter_name] = callback_(default)
+                    if default not in (Signature.empty, None):
+                        try:
+                            kwargs[parameter_name] = callback_(default)
+                            # Clear preceding errors for this parameter
+                            errors.pop(parameter_name, None)
+                        except Exception:  # noqa: BLE001
+                            errors.setdefault(parameter_name, [])
+                            errors[parameter_name].append(get_exception_text())
+                if (function is original_function) and errors:
+                    arguments_error_messages: dict[str, list[str]] = {}
+                    for key, argument_error_messages in errors.items():
+                        # Don't raise an error for parameters which
+                        # have a value or default value
+                        if kwargs.get(key) is None:
+                            parameter = function_signature.parameters.get(key)
+                            if parameter and (
+                                parameter.default is Signature.empty
+                            ):
+                                arguments_error_messages[key] = (
+                                    argument_error_messages
+                                )
+                    # Clear global errors collection
+                    del _FUNCTIONS_ERRORS[id(function)]
+                    if arguments_error_messages:
+                        raise ArgumentsResolutionError(
+                            arguments_error_messages
+                        )
             # Remove unused callback arguments
             deque(map(kwargs.pop, unused_callback_parameter_names), maxlen=0)
             # Remove arguments which do not correspond to

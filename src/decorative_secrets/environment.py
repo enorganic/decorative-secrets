@@ -12,11 +12,11 @@ if TYPE_CHECKING:
 
 
 async def _async_getenv(env: Mapping[str, str], name: str) -> str | None:
-    return await asyncio.to_thread(env.get, name)
+    return await asyncio.to_thread(env.__getitem__, name)
 
 
 def _getenv(env: Mapping[str, str], name: str) -> str | None:
-    return env.get(name)
+    return env[name]
 
 
 def apply_environment_arguments(

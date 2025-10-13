@@ -1,6 +1,8 @@
 import asyncio
 import os
 
+from decorative_secrets.environment import apply_environment_arguments
+from decorative_secrets.errors import ArgumentsResolutionError
 from decorative_secrets.onepassword import (
     _parse_resource,
     _resolve_auth_arguments,
@@ -40,6 +42,11 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
         databricks_client_id="databricks_client_id_onepassword",
         databricks_client_secret=("databricks_client_secret_onepassword"),
     )
+    @apply_environment_arguments(
+        databricks_host="databricks_host_environment_variable",
+        databricks_client_id="databricks_client_id_environment_variable",
+        databricks_client_secret="databricks_client_secret_environment_variable",
+    )
     def infer_databricks_credentials(
         databricks_host: str,
         databricks_client_id: str,
@@ -47,6 +54,9 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
         databricks_host_onepassword: str | None = None,  # noqa: ARG001
         databricks_client_id_onepassword: str | None = None,  # noqa: ARG001
         databricks_client_secret_onepassword: str | None = None,  # noqa: ARG001
+        databricks_host_environment_variable: str | None = None,  # noqa: ARG001
+        databricks_client_id_environment_variable: str | None = None,  # noqa: ARG001
+        databricks_client_secret_environment_variable: str | None = None,  # noqa: ARG001
     ) -> dict[str, str]:
         return {
             "databricks_host": databricks_host,
@@ -86,6 +96,60 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             )
             == credentials
         )
+        # Ensure that setting an environment variable does not change
+        # the result
+        os.environ["DATABRICKS_HOST"] = "https://nonsense.cloud.databricks.com"
+        assert (
+            infer_databricks_credentials(
+                databricks_host_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/hostname"
+                ),
+                databricks_client_id_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/username"
+                ),
+                databricks_client_secret_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/credential"
+                ),
+                databricks_host_environment_variable="DATABRICKS_HOST",
+            )
+            == credentials
+        )
+        # ...unless the preceding lookup is missing
+        assert (
+            infer_databricks_credentials(
+                databricks_host_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/nonsense"
+                ),
+                databricks_client_id_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/username"
+                ),
+                databricks_client_secret_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/credential"
+                ),
+                databricks_host_environment_variable="DATABRICKS_HOST",
+            )
+            != credentials
+        )
+        # Make sure an error is raised if no lookups are successful for
+        # a required parameter
+        try:
+            infer_databricks_credentials(
+                databricks_host_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/nonsense"
+                ),
+                databricks_client_id_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/username"
+                ),
+                databricks_client_secret_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/credential"
+                ),
+                databricks_host_environment_variable="nonsense",
+            )
+        except ArgumentsResolutionError:
+            pass
+        else:
+            message: str = "Expected an `ArgumentsResolutionError`"
+            raise AssertionError(message)
     finally:
         os.environ.clear()
         os.environ.update(env)

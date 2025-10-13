@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 
 class InterfaceNotInstalledError(RuntimeError):
     """
@@ -66,4 +71,37 @@ class DatabricksCLINotInstalledError(InterfaceNotInstalledError):
         super().__init__(
             "the Databricks CLI",
             "https://docs.databricks.com/aws/en/dev-tools/cli/install",
+        )
+
+
+def _iter_arguments_error_messages_lines(
+    arguments_error_messages: dict[str, list[str]],
+) -> Iterable[str]:
+    parameter_name: str
+    parameter_error_messages: list[str]
+    is_first: bool = True
+    for (
+        parameter_name,
+        parameter_error_messages,
+    ) in arguments_error_messages.items():
+        if not is_first:
+            yield ""
+        yield (
+            "Errors were encountered looking up values for "
+            f"`{parameter_name}`:\n"
+        )
+        yield from parameter_error_messages
+        is_first = False
+
+
+class ArgumentsResolutionError(ValueError):
+    """
+    Raised when one or more arguments cannot be resolved.
+    """
+
+    def __init__(self, arguments_error_messages: dict[str, list[str]]) -> None:
+        super().__init__(
+            "\n".join(
+                _iter_arguments_error_messages_lines(arguments_error_messages)
+            )
         )
