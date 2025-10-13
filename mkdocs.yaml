@@ -4,11 +4,10 @@ repo_url: https://github.com/enorganic/dependence/
 edit_uri: blob/main/docs/
 nav:
 - Introduction: 'index.md'
-- CLI Reference: 'cli.md'
 - API Reference:
-    - freeze: 'api/freeze.md'
-    - update: 'api/update.md'
-    - upgrade: 'api/upgrade.md'
+    - databricks: 'api/databricks.md'
+    - onepassword: 'api/onepassword.md'
+    - environment: 'api/environment.md'
 - Contributing: 'contributing.md'
 theme:
   name: material
@@ -39,7 +38,6 @@ theme:
 plugins:
   - search
   - autorefs
-  - mkdocstrings
   - mkdocstrings:
       default_handler: python
       handlers:

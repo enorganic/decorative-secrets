@@ -465,11 +465,11 @@ def apply_databricks_secret_arguments(
 ) -> Callable:
     """
     This decorator maps parameter names to Databricks secrets.
-    Each key represents the name of a parameter in the decorated function
-    which accepts an explicit input, and the corresponding mapped value is a
-    parameter name accepting a tuple with the secret scope and key with which
-    to lookup a secret to pass to the mapped parameter in lieu of an explicitly
-    provided argument.
+    Each key in `databricks_secret_arguments` represents the name of a
+    parameter in the decorated function which accepts an explicit input, and
+    the corresponding mapped value is a parameter name accepting a tuple with
+    the secret scope and key with which to lookup a secret to pass to the
+    mapped parameter in lieu of an explicitly provided argument.
 
     Parameters:
         databricks_secret_arguments:
@@ -477,10 +477,16 @@ def apply_databricks_secret_arguments(
             of arguments accepting Databricks secret scope + key tuples
             from which to retrieve a value when the key argument is not
             explicitly provided.
-        kwargs: In lieu of passing a dictionary to
+        **kwargs: In lieu of passing a dictionary to
             `databricks_secret_arguments`, the same mapping may be
             provided as keyword arguments.
-        databricks_host:
+        databricks_host: A Databricks workspace host URL. This, and all other
+            `databricks_` prefixed parameters, are passed to an instance
+            of `databricks.sdk.WorkspaceClient` (stripped of the
+            "databricks_" prefix) when retrieving secrets remotely,
+            and are ignored when the function is executed from within a
+            Databricks runtime. Most of these parameters may also be configured
+            as environment variables.
         databricks_account_id:
         databricks_username:
         databricks_password:
