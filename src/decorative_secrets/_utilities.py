@@ -275,7 +275,9 @@ def databricks_auth_login(host: str | None = None) -> None:
         host = os.getenv("DATABRICKS_HOST")
     databricks = which_databricks()
     if host:
-        check_output((databricks, "auth", "login", host), input=b"\n")
+        check_output(
+            (databricks, "auth", "login", "--host", host), input=b"\n"
+        )
     else:
         # Automatically select the default/first profile if no host
         # is specified

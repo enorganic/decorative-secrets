@@ -3,11 +3,16 @@ from __future__ import annotations
 import os
 from contextlib import suppress
 from functools import cache, partial
+from subprocess import CalledProcessError
 from typing import TYPE_CHECKING
 
 from databricks.sdk import WorkspaceClient
 
-from decorative_secrets._utilities import apply_callback_arguments
+from decorative_secrets._utilities import (
+    apply_callback_arguments,
+    databricks_auth_login,
+)
+from decorative_secrets.errors import DatabricksCLINotInstalledError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -51,6 +56,16 @@ def _get_env_databricks_workspace_client(
     Get a Databricks WorkspaceClient. This function is cached based on
     environment variables, to ensure changes to the environment are reflected.
     """
+    if not (
+        (client_id or os.getenv("DATABRICKS_CLIENT_ID"))
+        and (client_secret or os.getenv("DATABRICKS_CLIENT_SECRET"))
+    ):
+        with suppress(
+            CalledProcessError,
+            FileNotFoundError,
+            DatabricksCLINotInstalledError,
+        ):
+            databricks_auth_login()
     return WorkspaceClient(
         host=host,
         account_id=account_id,
