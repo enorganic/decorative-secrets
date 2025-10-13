@@ -35,6 +35,9 @@ jobs:
         - 3.13
     steps:
     - uses: actions/checkout@v4
+
+    - uses: databricks/setup-cli@main
+    - uses: 1password/install-cli-action@v2
     - name: Install Hatch
       uses: pypa/hatch@install
     - name: test

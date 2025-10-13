@@ -15,6 +15,15 @@ if TYPE_CHECKING:
 
 
 def test_get_secret(databricks_env: dict[str, str]) -> None:
+    if not os.getenv("CI"):
+        # If not running unsupervised, test interactive login
+        assert os.getenv("DATABRICKS_HOST")
+        assert not os.getenv("DATABRICKS_CLIENT_ID")
+        assert not os.getenv("DATABRICKS_CLIENT_SECRET")
+        assert (
+            get_secret("decorative-secrets-test", "my-secret-key")
+            == "my-secret-value"
+        )
     env: Mapping[str, str] = os.environ.copy()
     try:
         os.environ.update(databricks_env)
