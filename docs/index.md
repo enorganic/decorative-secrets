@@ -14,10 +14,7 @@ hygiene and test-driven development.
 Currently, the following secret sources are supported:
 
 -   [Databricks Secrets](https://docs.databricks.com/aws/en/security/secrets/)
-    (`pip3 install decorative-secrets[databricks]`):
-    This mechanism for retrieval is only available for code executed in a
-    Databricks runtime, so should be used in conjunction with another fallback
-    mechanism for local testing.
+    (`pip3 install decorative-secrets[databricks]`)
 -   [1Password](https://1password.com/)
     (`pip3 install decorative-secrets[onepassword]`):
     1Password secrets are retrieved dynamically using the [1Password CLI
