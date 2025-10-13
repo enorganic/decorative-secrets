@@ -78,6 +78,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
 
     env: dict[str, str] = os.environ.copy()
     try:
+        # Test the same operation using a service account token
         token: str = read_onepassword_secret(
             f"op://{onepassword_vault}/62u4plbr2i7ueb4boywtbbyd24/credential"
         )

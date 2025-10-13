@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+from contextlib import suppress
 from functools import cache, partial
 from importlib.metadata import distribution
+from subprocess import CalledProcessError
 from typing import TYPE_CHECKING, Any
 from urllib.parse import ParseResult, urlparse
 
@@ -20,6 +22,7 @@ from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
 from decorative_secrets._utilities import (  # type: ignore[import-untyped]
     apply_callback_arguments,
     check_output,
+    op_signin,
     which_op,
 )
 
@@ -146,8 +149,14 @@ async def async_read_onepassword_secret(
         if host:
             return await _async_resolve_connect_resource(token, host, resource)
         return await _async_resolve_resource(token, resource)
+    op: str | None = None
+    if account:
+        with suppress(FileNotFoundError, CalledProcessError):
+            op = op_signin(account)
+    if not op:
+        op = which_op() or "op"
     return check_output(
-        (which_op(), "read")
+        (op, "read")
         + (("--account", account) if account else ())
         + (("--session", token) if token else ())
         + (resource,)
@@ -155,11 +164,42 @@ async def async_read_onepassword_secret(
 
 
 @cache
+def _read_onepassword_secret(
+    resource: str,
+    account: str | None = None,
+    token: str | None = None,
+    host: str | None = None,
+    **env: str,  # noqa: ARG001
+) -> str:
+    """
+    This function is wrapped by `read_onepassword_secret` to allow caching
+    to be invalidated based on environment variable changes.
+    """
+    account, token, host = _resolve_auth_arguments(account, token, host)
+    if token:
+        if host:
+            return _resolve_connect_resource(token, host, resource)
+        return asyncio.run(_async_resolve_resource(token, resource))
+    op: str | None = None
+    if account:
+        with suppress(FileNotFoundError, CalledProcessError):
+            op = op_signin(account)
+    if not op:
+        op = which_op() or "op"
+    return check_output(
+        (op, "read")
+        + (("--account", account) if account else ())
+        + (("--session", token) if token else ())
+        + (resource,)
+    )
+
+
 def read_onepassword_secret(
     resource: str,
     account: str | None = None,
     token: str | None = None,
     host: str | None = None,
+    **env: str,  # noqa: ARG001
 ) -> str:
     """
     Read a secret from 1Password using either the `onepassword-sdk` or
@@ -180,16 +220,8 @@ def read_onepassword_secret(
     Returns:
         The resolved secret value.
     """
-    account, token, host = _resolve_auth_arguments(account, token, host)
-    if token:
-        if host:
-            return _resolve_connect_resource(token, host, resource)
-        return asyncio.run(_async_resolve_resource(token, resource))
-    return check_output(
-        (which_op(), "read")
-        + (("--account", account) if account else ())
-        + (("--session", token) if token else ())
-        + (resource,)
+    return _read_onepassword_secret(
+        resource, account=account, token=token, host=host, **os.environ
     )
 
 

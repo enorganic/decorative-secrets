@@ -51,7 +51,7 @@ upgrade:
 
 # This will update dependencies to reflect the latest installed versions,
 # and output the frozen requiements.txt file for use in job deployment
-requirements:
+update:
 	hatch run dependence update\
 	 --include-pointer /tool/hatch/envs/default\
 	 --include-pointer /project\

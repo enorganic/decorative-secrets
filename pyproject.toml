@@ -108,13 +108,19 @@ features = [
 
 [tool.hatch.envs.hatch-test]
 template = "hatch-test"
-extra-args = ["-s", "-vv"]
+extra-args = [
+    "-s",
+    "-vv",
+]
 extra-dependencies = [
     "dependence",
 ]
 features = [
     "all",
 ]
+
+[tool.hatch.envs.hatch-test.env-vars]
+DATABRICKS_HOST = "https://dbc-667055c2-5dbc.cloud.databricks.com"
 
 [[tool.hatch.envs.hatch-test.matrix]]
 python = [

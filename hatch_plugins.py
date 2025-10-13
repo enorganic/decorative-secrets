@@ -8,7 +8,7 @@ from hatch.env.collectors.plugin.interface import EnvironmentCollectorInterface
 
 ENV: Path = Path(__file__).parent / ".env"
 PATTERN: re.Pattern = re.compile(
-    r"""^([^\s=]+)=(?:[\s"']*)(.+?)(?:[\s"']*)$"""
+    r"""^([^\s#=]+)=(?:[\s"']*)(.+?)(?:[\s"']*)$"""
 )
 
 
@@ -34,4 +34,4 @@ class DotEnvCollectorInterface(EnvironmentCollectorInterface):
                     environment["env-vars"] = env
                 else:
                     environment["env-vars"].update(env)
-        return config
+        return super().finalize_environments(config)
