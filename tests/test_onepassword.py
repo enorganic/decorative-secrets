@@ -1,15 +1,47 @@
 import asyncio
 import os
+import sys
+from contextlib import suppress
 
+from decorative_secrets._utilities import check_output
 from decorative_secrets.environment import apply_environment_arguments
-from decorative_secrets.errors import ArgumentsResolutionError
+from decorative_secrets.errors import (
+    ArgumentsResolutionError,
+    OnePasswordCommandLineInterfaceNotInstalledError,
+)
 from decorative_secrets.onepassword import (
+    _install_op,
     _parse_resource,
     _resolve_auth_arguments,
     apply_onepassword_arguments,
     async_read_onepassword_secret,
     read_onepassword_secret,
+    which_op,
 )
+
+
+def test_which_op() -> None:
+    """
+    Verify that the 1Password CLI is installed on invocation.
+    """
+    try:
+        op: str = which_op()
+        assert check_output((op, "--version"))
+    except OnePasswordCommandLineInterfaceNotInstalledError:
+        # The 1Password CLI should be possible to bootstrap on macOS and
+        # Windows, but not Linux
+        if sys.platform.startswith(("darwin", "win32")):
+            raise
+
+
+def test_install_op() -> None:
+    """
+    Verify that the 1Password CLI can be installed.
+    """
+    with suppress(OnePasswordCommandLineInterfaceNotInstalledError):
+        _install_op()
+        op: str = which_op()
+        assert check_output((op, "--version"))
 
 
 def test_async_read_onepassword_secret(onepassword_vault: str) -> None:

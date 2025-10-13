@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from contextlib import suppress
 from functools import cache, partial
 from importlib.metadata import distribution
+from shutil import which
 from subprocess import CalledProcessError
 from typing import TYPE_CHECKING, Any
 from urllib.parse import ParseResult, urlparse
@@ -22,8 +24,12 @@ from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
 from decorative_secrets._utilities import (  # type: ignore[import-untyped]
     apply_callback_arguments,
     check_output,
-    op_signin,
-    which_op,
+    which_brew,
+    which_winget,
+)
+from decorative_secrets.errors import (
+    OnePasswordCommandLineInterfaceNotInstalledError,
+    WinGetNotInstalledError,
 )
 
 if TYPE_CHECKING:
@@ -36,6 +42,62 @@ if TYPE_CHECKING:
 
 _INTEGRATION_NAME: str = "decorative-secrets"
 _INTEGRATION_VERSION: str = distribution("decorative-secrets").version
+
+
+def _install_op() -> None:
+    """
+    Install the 1Password CLI.
+    """
+    message: str
+    if sys.platform.startswith("win"):
+        try:
+            check_output((which_winget(), "install", "1password-cli"))
+        except (
+            CalledProcessError,
+            FileNotFoundError,
+            WinGetNotInstalledError,
+        ) as error:
+            raise OnePasswordCommandLineInterfaceNotInstalledError from error
+    elif sys.platform == "darwin":
+        try:
+            check_output((which_brew(), "install", "1password-cli"))
+        except (CalledProcessError, FileNotFoundError) as error:
+            raise OnePasswordCommandLineInterfaceNotInstalledError from error
+    else:
+        raise OnePasswordCommandLineInterfaceNotInstalledError
+
+
+def which_op() -> str:
+    """
+    Locate the 1Password CLI executable, or attempt
+    to install it if not found.
+    """
+    op: str = which("op") or "op"
+    try:
+        check_output((op, "--version"))
+    except (CalledProcessError, FileNotFoundError):
+        _install_op()
+        op = which("op") or "op"
+    return op
+
+
+@cache
+def _op_signin(account: str | None = None) -> str:
+    op: str = which_op()
+    if not account:
+        account = os.getenv("OP_ACCOUNT")
+    check_output(
+        (op, "signin", "--account", account) if account else (op, "signin"),
+        input=None if account else b"\n\n",
+    )
+    return op
+
+
+def op_signin(account: str | None = None) -> str:
+    """
+    Sign in to 1Password using the CLI if not already signed in.
+    """
+    return _op_signin(account or os.getenv("OP_ACCOUNT"))
 
 
 def _resolve_auth_arguments(

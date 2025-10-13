@@ -6,12 +6,28 @@ from typing import TYPE_CHECKING
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 
 from decorative_secrets.databricks import (
+    _install_databricks_cli,
+    _install_sh_databricks_cli,
     apply_databricks_secrets_arguments,
     get_secret,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+
+def test_install_sh_databricks_cli() -> None:
+    """
+    Verify that the Databricks CLI install script can be downloaded and run.
+    """
+    _install_sh_databricks_cli()
+
+
+def test_install_databricks_cli() -> None:
+    """
+    Verify that the Databricks CLI install script can be downloaded and run.
+    """
+    _install_databricks_cli()
 
 
 def test_get_secret(databricks_env: dict[str, str]) -> None:
