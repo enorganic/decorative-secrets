@@ -231,9 +231,11 @@ def install_databricks_cli() -> None:
     if sys.platform.startswith("win"):
         winget: str | None = which_winget()
         if winget:
-            check_output((winget, "search", "DatabricksCLI"))
-            check_output((winget, "install", "Databricks.DatabricksCLI"))
-            return
+            with suppress(CalledProcessError):
+                check_output((winget, "search", "DatabricksCLI"))
+            with suppress(CalledProcessError):
+                check_output((winget, "install", "Databricks.DatabricksCLI"))
+                return
     elif sys.platform == "darwin":
         brew: str
         # Here we suppress the HomebrewNotInstalledError because we
@@ -244,8 +246,9 @@ def install_databricks_cli() -> None:
             if brew:
                 with suppress(CalledProcessError):
                     check_output((brew, "tap", "databricks/tap"))
-                check_output((brew, "install", "databricks"))
-                return
+                with suppress(CalledProcessError):
+                    check_output((brew, "install", "databricks"))
+                    return
     install_sh_databricks_cli()
 
 
