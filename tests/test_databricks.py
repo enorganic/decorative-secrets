@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 
 from decorative_secrets.databricks import (
-    apply_databricks_secret_arguments,
+    apply_databricks_secrets_arguments,
     get_secret,
 )
 
@@ -39,7 +39,7 @@ def test_apply_databricks_secret_arguments(
 ) -> None:
     env: Mapping[str, str] = os.environ.copy()
 
-    @apply_databricks_secret_arguments(
+    @apply_databricks_secrets_arguments(
         my_secret="my_secret_databricks_secret",
     )
     def get_my_secret(

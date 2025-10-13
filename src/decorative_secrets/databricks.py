@@ -431,7 +431,7 @@ def _get_scope_key_secret(
     )
 
 
-def apply_databricks_secret_arguments(
+def apply_databricks_secrets_arguments(
     databricks_secret_arguments: (
         Mapping[str, str] | Iterable[tuple[str, str]]
     ) = (),
