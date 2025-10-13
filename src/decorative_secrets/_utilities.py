@@ -428,20 +428,13 @@ def apply_callback_arguments(  # noqa: C901
     Examples:
         >>> @apply_callback_arguments(
         ...     lambda x: x * 2,
-        ...     {
-        ...         "x": "x_lookup_args"
-        ...     },
+        ...     {"x": "x_lookup_args"},
         ... )
         ... def return_value(
-        ...     x: int
-        ...     | None = None,
+        ...     x: int | None = None,
         ...     x_lookup_args: tuple[
-        ...         Sequence[
-        ...             int
-        ...         ],
-        ...         Mapping[
-        ...             str, int
-        ...         ],
+        ...         Sequence[int],
+        ...         Mapping[str, int],
         ...     ]
         ...     | None = None,
         ... ) -> int:

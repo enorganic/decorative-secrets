@@ -532,13 +532,10 @@ def apply_databricks_secrets_arguments(
             client_secret="client_secret_databricks_secret",
         )
         def get_client(
-            client_id: str
-            | None = None,
+            client_id: str | None = None,
             client_secret: str = None,
-            client_id_databricks_secret: str
-            | None = None,
-            client_secret_databricks_secret: str
-            | None = None,
+            client_id_databricks_secret: str | None = None,
+            client_secret_databricks_secret: str | None = None,
         ) -> Client:
             return Client(
                 oauth2_client_id=client_id,

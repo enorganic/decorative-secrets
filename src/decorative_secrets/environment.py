@@ -64,13 +64,10 @@ def apply_environment_arguments(
             client_secret="client_secret_environment_variable",
         )
         def get_client(
-            client_id: str
-            | None = None,
+            client_id: str | None = None,
             client_secret: str = None,
-            client_id_environment_variable: str
-            | None = None,
-            client_secret_environment_variable: str
-            | None = None,
+            client_id_environment_variable: str | None = None,
+            client_secret_environment_variable: str | None = None,
         ) -> Client:
             return Client(
                 oauth2_client_id=client_id,
@@ -79,12 +76,8 @@ def apply_environment_arguments(
 
 
         client: Client = get_client(
-            client_id_environment_variable=(
-                "CLIENT_ID",
-            ),
-            client_secret_environment_variable=(
-                "CLIENT_SECRET",
-            ),
+            client_id_environment_variable=("CLIENT_ID",),
+            client_secret_environment_variable=("CLIENT_SECRET",),
         )
         ```
     """

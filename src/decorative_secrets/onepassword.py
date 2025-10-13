@@ -285,13 +285,10 @@ def apply_onepassword_arguments(
             client_secret="client_secret_onepassword",
         )
         def get_client(
-            client_id: str
-            | None = None,
+            client_id: str | None = None,
             client_secret: str = None,
-            client_id_onepassword: str
-            | None = None,
-            client_secret_onepassword: str
-            | None = None,
+            client_id_onepassword: str | None = None,
+            client_secret_onepassword: str | None = None,
         ) -> Client:
             return Client(
                 oauth2_client_id=client_id,
