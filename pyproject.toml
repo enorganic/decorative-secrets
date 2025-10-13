@@ -53,7 +53,7 @@ all = [
 decorative-secrets = "decorative_secrets.__main__:main"
 
 [project.urls]
-Documentation = "https://enorganic.github.io/decorative-secrets"
+Documentation = "https://decorative-secrets.enorganic.org"
 Repository = "https://github.com/enorganic/decorative-secrets"
 
 [tool.hatch.build.targets.sdist]

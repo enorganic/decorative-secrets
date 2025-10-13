@@ -11,8 +11,8 @@ to expose multiple authentication mechanisms is intended to facilitate
 development practices which maintain a semblance of harmony between security
 hygiene and test-driven development.
 
-- [Documentation](https://enorganic.github.io/decorative-secrets/)
-- [Contributing](https://enorganic.github.io/decorative-secrets/contributing)
+- [Documentation](https://decorative-secrets.enorganic.org)
+- [Contributing](https://decorative-secrets.enorganic.org/contributing)
 
 Currently, the following secret sources are supported:
 

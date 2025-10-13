@@ -1,6 +1,6 @@
 site_name: decorative-secrets
-site_url: https://enorganic.github.io/dependence/
-repo_url: https://github.com/enorganic/dependence/
+site_url: https://decorative-secrets.enorganic.org
+repo_url: https://github.com/enorganic/decorative-secrets/
 edit_uri: blob/main/docs/
 nav:
 - Introduction: 'index.md'
