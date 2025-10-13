@@ -46,6 +46,7 @@ def apply_environment_arguments(
             `environment_arguments`.
 
     Example:
+        ```python
         from functools import cache
         from decorative_secrets.environment import apply_environment_arguments
         from my_client_sdk import Client
@@ -75,6 +76,7 @@ def apply_environment_arguments(
                 "CLIENT_SECRET",
             ),
         )
+        ```
     """
     return apply_callback_arguments(
         partial(_getenv, env or os.environ),

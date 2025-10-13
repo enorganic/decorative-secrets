@@ -267,6 +267,7 @@ def apply_onepassword_arguments(
             provided as keyword arguments.
 
     Example:
+        ```python
         from functools import cache
         from decorative_secrets.onepassword import apply_onepassword_arguments
         from my_client_sdk import Client
@@ -296,6 +297,7 @@ def apply_onepassword_arguments(
                 "op://Vault Name/Client Secret Item Name/credential",
             ),
         )
+        ```
     """
     read_onepassword_secret_: Callable[..., str] = read_onepassword_secret
     async_read_onepassword_secret_: Callable[

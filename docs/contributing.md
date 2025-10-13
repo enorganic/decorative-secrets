@@ -1,6 +1,6 @@
 # Contributing to decorative-secrets
 
-## For B.Well Contributors and Code Owners
+## For Enorganic Contributors and Code Owners
 
 1.  Clone and Install
 

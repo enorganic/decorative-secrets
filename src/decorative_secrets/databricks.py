@@ -514,6 +514,7 @@ def apply_databricks_secrets_arguments(
         databricks_config:
 
     Example:
+        ```python
         from functools import cache
         from decorative_secrets.databricks import (
             apply_databricks_secret_arguments
@@ -545,6 +546,7 @@ def apply_databricks_secrets_arguments(
                 "client", "client-secret"
             ),
         )
+        ```
     """
     get_scope_key_secret: Callable[[str | tuple[str, str]], str] = partial(
         _get_scope_key_secret,
