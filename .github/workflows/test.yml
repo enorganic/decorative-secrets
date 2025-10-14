@@ -12,6 +12,9 @@ on:
     - .github/workflows/test.yml
 env:
   OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+  DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+  DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+  DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
 jobs:
   lint:
     runs-on: ubuntu-latest

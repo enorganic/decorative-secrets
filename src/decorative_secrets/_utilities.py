@@ -6,7 +6,7 @@ import sys
 from collections import deque
 from collections.abc import Coroutine
 from contextlib import suppress
-from functools import cache, update_wrapper, wraps
+from functools import cache, partial, update_wrapper, wraps
 from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
@@ -26,15 +26,19 @@ import nest_asyncio  # type: ignore[import-untyped]
 
 from decorative_secrets.errors import (
     ArgumentsResolutionError,
-    DatabricksCLINotInstalledError,
     HomebrewNotInstalledError,
-    OnePasswordCommandLineInterfaceNotInstalledError,
     WinGetNotInstalledError,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
+
+
+def iscoroutinefunction(function: Any) -> bool:
+    if isinstance(function, partial):
+        return iscoroutinefunction(function.func)
+    return asyncio.iscoroutinefunction(function)
 
 
 def get_exception_text() -> str:
@@ -149,139 +153,6 @@ def which_winget() -> str | None:
         raise WinGetNotInstalledError from error
     else:
         return winget
-
-
-def install_op() -> None:
-    """
-    Install the 1Password CLI.
-    """
-    message: str
-    if sys.platform.startswith("win"):
-        try:
-            check_output((which_winget(), "install", "1password-cli"))
-        except (
-            CalledProcessError,
-            FileNotFoundError,
-            WinGetNotInstalledError,
-        ) as error:
-            raise OnePasswordCommandLineInterfaceNotInstalledError from error
-    elif sys.platform == "darwin":
-        try:
-            check_output((which_brew(), "install", "1password-cli"))
-        except (CalledProcessError, FileNotFoundError) as error:
-            raise OnePasswordCommandLineInterfaceNotInstalledError from error
-    else:
-        raise OnePasswordCommandLineInterfaceNotInstalledError
-
-
-def which_op() -> str:
-    op: str = which("op") or "op"
-    try:
-        check_output((op, "--version"))
-    except (CalledProcessError, FileNotFoundError):
-        install_op()
-        op = which("op") or "op"
-    return op
-
-
-@cache
-def op_signin(account: str | None = None) -> str:
-    """
-    Sign in to 1Password using the CLI if not already signed in.
-    """
-    op: str = which_op()
-    if not account:
-        account = os.getenv("OP_ACCOUNT")
-    check_output(
-        (op, "signin", "--account", account) if account else (op, "signin"),
-        input=None if account else b"\n\n",
-    )
-    return op
-
-
-def install_sh_databricks_cli() -> None:
-    """
-    Install the Databricks CLI using the install script.
-    """
-    with urlopen(
-        "https://raw.githubusercontent.com/databricks/setup-cli/"
-        "main/install.sh"
-    ) as install_io:
-        sh: str = which("sh") or "sh"
-        try:
-            check_output((sh,), input=install_io.read())
-        except (CalledProcessError, FileNotFoundError) as error:
-            if (
-                (not isinstance(error, CalledProcessError))
-                or (not error.stdout)
-                or (
-                    (b"already exists" not in error.stdout)
-                    and (b"'sudo'" not in error.stdout)
-                )
-            ):
-                # This is usually because the script requires `sudo` access to
-                # run
-                raise DatabricksCLINotInstalledError from error
-
-
-def install_databricks_cli() -> None:
-    """
-    Install the Databricks CLI.
-    """
-    if sys.platform.startswith("win"):
-        winget: str | None = which_winget()
-        if winget:
-            with suppress(CalledProcessError):
-                check_output((winget, "search", "DatabricksCLI"))
-            with suppress(CalledProcessError):
-                check_output((winget, "install", "Databricks.DatabricksCLI"))
-                return
-    elif sys.platform == "darwin":
-        brew: str
-        # Here we suppress the HomebrewNotInstalledError because we
-        # can still attempt to install the Databricks CLI using
-        # the install script
-        with suppress(HomebrewNotInstalledError):
-            brew = which_brew()
-            if brew:
-                with suppress(CalledProcessError):
-                    check_output((brew, "tap", "databricks/tap"))
-                with suppress(CalledProcessError):
-                    check_output((brew, "install", "databricks"))
-                    return
-    install_sh_databricks_cli()
-
-
-def which_databricks() -> str:
-    """
-    Find the `databricks` executable, or install the Databricks CLI if not
-    found.
-    """
-    databricks: str = which("databricks") or "databricks"
-    try:
-        check_output((databricks, "--version"))
-    except (CalledProcessError, FileNotFoundError):
-        install_databricks_cli()
-        databricks = which("databricks") or "databricks"
-    return databricks
-
-
-@cache
-def databricks_auth_login(host: str | None = None) -> None:
-    """
-    Log in to Databricks using the CLI if not already logged in.
-    """
-    if host is None:
-        host = os.getenv("DATABRICKS_HOST")
-    databricks = which_databricks()
-    if host:
-        check_output(
-            (databricks, "auth", "login", "--host", host), input=b"\n"
-        )
-    else:
-        # Automatically select the default/first profile if no host
-        # is specified
-        check_output((databricks, "auth", "login"), input=b"\n\n")
 
 
 def as_tuple(
@@ -450,9 +321,9 @@ def apply_callback_arguments(  # noqa: C901
         36
     """
     message: str
-    if (callback is not None) and asyncio.iscoroutinefunction(callback):
+    if (callback is not None) and iscoroutinefunction(callback):
         raise TypeError(callback)
-    if (async_callback is not None) and not asyncio.iscoroutinefunction(
+    if (async_callback is not None) and not iscoroutinefunction(
         async_callback
     ):
         raise TypeError(async_callback)
@@ -577,7 +448,7 @@ def apply_callback_arguments(  # noqa: C901
             )
             return (args, kwargs)
 
-        if asyncio.iscoroutinefunction(function):
+        if iscoroutinefunction(function):
 
             @wraps(function)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:

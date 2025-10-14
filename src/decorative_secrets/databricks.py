@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import os
+import sys
 from contextlib import suppress
 from functools import cache, partial
-from subprocess import CalledProcessError
+from shutil import which
+from subprocess import CalledProcessError, check_output
 from typing import TYPE_CHECKING
+from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
     apply_callback_arguments,
-    databricks_auth_login,
+    which_brew,
+    which_winget,
 )
-from decorative_secrets.errors import DatabricksCLINotInstalledError
+from decorative_secrets.errors import (
+    DatabricksCLINotInstalledError,
+    HomebrewNotInstalledError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -20,6 +27,95 @@ if TYPE_CHECKING:
     from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
+
+
+def _install_sh_databricks_cli() -> None:
+    """
+    Install the Databricks CLI using the install script.
+    """
+    with urlopen(
+        "https://raw.githubusercontent.com/databricks/setup-cli/"
+        "main/install.sh"
+    ) as install_io:
+        sh: str = which("sh") or "sh"
+        try:
+            check_output((sh,), input=install_io.read())
+        except (CalledProcessError, FileNotFoundError) as error:
+            if (
+                (not isinstance(error, CalledProcessError))
+                or (not error.stdout)
+                or (
+                    (b"already exists" not in error.stdout)
+                    and (b"'sudo'" not in error.stdout)
+                )
+            ):
+                # This is usually because the script requires `sudo` access to
+                # run
+                raise DatabricksCLINotInstalledError from error
+
+
+def _install_databricks_cli() -> None:
+    """
+    Install the Databricks CLI.
+    """
+    if sys.platform.startswith("win"):
+        winget: str | None = which_winget()
+        if winget:
+            with suppress(CalledProcessError):
+                check_output((winget, "search", "DatabricksCLI"))
+            with suppress(CalledProcessError):
+                check_output((winget, "install", "Databricks.DatabricksCLI"))
+                return
+    elif sys.platform == "darwin":
+        brew: str
+        # Here we suppress the HomebrewNotInstalledError because we
+        # can still attempt to install the Databricks CLI using
+        # the install script
+        with suppress(HomebrewNotInstalledError):
+            brew = which_brew()
+            if brew:
+                with suppress(CalledProcessError):
+                    check_output((brew, "tap", "databricks/tap"))
+                with suppress(CalledProcessError):
+                    check_output((brew, "install", "databricks"))
+                    return
+    _install_sh_databricks_cli()
+
+
+def which_databricks() -> str:
+    """
+    Find the `databricks` executable, or install the Databricks CLI if not
+    found.
+    """
+    databricks: str = which("databricks") or "databricks"
+    try:
+        check_output((databricks, "--version"))
+    except (CalledProcessError, FileNotFoundError):
+        _install_databricks_cli()
+        databricks = which("databricks") or "databricks"
+    return databricks
+
+
+@cache
+def _databricks_auth_login(host: str | None = None) -> None:
+    if host is None:
+        host = os.getenv("DATABRICKS_HOST")
+    databricks = which_databricks()
+    if host:
+        check_output(
+            (databricks, "auth", "login", "--host", host), input=b"\n"
+        )
+    else:
+        # Automatically select the default/first profile if no host
+        # is specified
+        check_output((databricks, "auth", "login"), input=b"\n\n")
+
+
+def databricks_auth_login(host: str | None = None) -> None:
+    """
+    Log in to Databricks using the CLI if not already logged in.
+    """
+    return _databricks_auth_login(host or os.getenv("DATABRICKS_HOST"))
 
 
 @cache

@@ -1,35 +1,97 @@
 import asyncio
 import os
+import sys
+from contextlib import suppress
 
+from onepassword.errors import (  # type: ignore[import-untyped]
+    RateLimitExceededException,
+)
+
+from decorative_secrets._utilities import check_output, get_exception_text
 from decorative_secrets.environment import apply_environment_arguments
-from decorative_secrets.errors import ArgumentsResolutionError
+from decorative_secrets.errors import (
+    ArgumentsResolutionError,
+    OnePasswordCommandLineInterfaceNotInstalledError,
+)
 from decorative_secrets.onepassword import (
+    _install_op,
     _parse_resource,
     _resolve_auth_arguments,
     apply_onepassword_arguments,
     async_read_onepassword_secret,
     read_onepassword_secret,
+    which_op,
 )
+
+
+def test_which_op() -> None:
+    """
+    Verify that the 1Password CLI is installed on invocation.
+    """
+    try:
+        op: str = which_op()
+        assert check_output((op, "--version"))
+    except OnePasswordCommandLineInterfaceNotInstalledError:
+        # The 1Password CLI should be possible to bootstrap on macOS and
+        # Windows, but not Linux
+        if sys.platform.startswith(("darwin", "win32")):
+            raise
+
+
+def test_install_op() -> None:
+    """
+    Verify that the 1Password CLI can be installed.
+    """
+    with suppress(OnePasswordCommandLineInterfaceNotInstalledError):
+        _install_op()
+        op: str = which_op()
+        assert check_output((op, "--version"))
 
 
 def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
     """
-    assert asyncio.run(
-        async_read_onepassword_secret(
-            f"op://{onepassword_vault}/Databricks Client/hostname"
+    try:
+        assert asyncio.run(
+            async_read_onepassword_secret(
+                f"op://{onepassword_vault}/Databricks Client/hostname",
+                account="my.1password.com",
+            )
         )
-    )
+    except RateLimitExceededException:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        pass
+    except Exception:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        if not (
+            "rate limit exceeded" in get_exception_text() and os.getenv("CI")
+        ):
+            raise
 
 
 def test_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
     """
-    assert read_onepassword_secret(
-        f"op://{onepassword_vault}/Databricks Client/hostname"
-    )
+    try:
+        assert read_onepassword_secret(
+            f"op://{onepassword_vault}/Databricks Client/hostname",
+            account="my.1password.com",
+        )
+    except RateLimitExceededException:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        pass
+    except Exception:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        if not (
+            "rate limit exceeded" in get_exception_text() and os.getenv("CI")
+        ):
+            raise
 
 
 def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
@@ -38,6 +100,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
     """
 
     @apply_onepassword_arguments(
+        onepassword_account="my.1password.com",
         databricks_host="databricks_host_onepassword",
         databricks_client_id="databricks_client_id_onepassword",
         databricks_client_secret=("databricks_client_secret_onepassword"),
@@ -64,25 +127,27 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             "databricks_client_secret": databricks_client_secret,
         }
 
-    credentials: dict[str, str] = infer_databricks_credentials(
-        databricks_host_onepassword=(
-            f"op://{onepassword_vault}/Databricks Client/hostname"
-        ),
-        databricks_client_id_onepassword=(
-            f"op://{onepassword_vault}/Databricks Client/username"
-        ),
-        databricks_client_secret_onepassword=(
-            f"op://{onepassword_vault}/Databricks Client/credential"
-        ),
-    )
-
     env: dict[str, str] = os.environ.copy()
     try:
-        # Test the same operation using a service account token
-        token: str = read_onepassword_secret(
-            f"op://{onepassword_vault}/62u4plbr2i7ueb4boywtbbyd24/credential"
+        credentials: dict[str, str] = infer_databricks_credentials(
+            databricks_host_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/hostname",
+            ),
+            databricks_client_id_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/username",
+            ),
+            databricks_client_secret_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/credential",
+            ),
         )
-        os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = token
+        # Test the same operation using a service account token
+        os.environ.setdefault(
+            "OP_SERVICE_ACCOUNT_TOKEN",
+            read_onepassword_secret(
+                f"op://{onepassword_vault}/"
+                "62u4plbr2i7ueb4boywtbbyd24/credential"
+            ),
+        )
         assert (
             infer_databricks_credentials(
                 databricks_host_onepassword=(
@@ -151,6 +216,11 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
         else:
             message: str = "Expected an `ArgumentsResolutionError`"
             raise AssertionError(message)
+    except ArgumentsResolutionError:
+        if "rate limit exceeded" in get_exception_text() and os.getenv("CI"):
+            # TODO: Remove this pending approval of
+            # [this](https://github.com/1Password/for-open-source/issues/1337)
+            pass
     finally:
         os.environ.clear()
         os.environ.update(env)

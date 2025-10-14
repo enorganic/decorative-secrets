@@ -194,4 +194,4 @@ source = [
 ]
 
 [tool.coverage.report]
-fail_under = 1
+fail_under = 60
