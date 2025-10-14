@@ -4,7 +4,7 @@ import sys
 from contextlib import suppress
 from subprocess import CalledProcessError
 
-from decorative_secrets._utilities import check_output
+from decorative_secrets._utilities import check_output, get_exception_text
 from decorative_secrets.environment import apply_environment_arguments
 from decorative_secrets.errors import (
     ArgumentsResolutionError,
@@ -60,7 +60,7 @@ def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
         if not (
-            "rate limit exceeded" in str(sys.exc_info()[1]) and os.getenv("CI")
+            "rate limit exceeded" in get_exception_text() and os.getenv("CI")
         ):
             raise
 
@@ -78,7 +78,7 @@ def test_read_onepassword_secret(onepassword_vault: str) -> None:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
         if not (
-            "rate limit exceeded" in str(sys.exc_info()[1]) and os.getenv("CI")
+            "rate limit exceeded" in get_exception_text() and os.getenv("CI")
         ):
             raise
 
@@ -206,7 +206,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             message: str = "Expected an `ArgumentsResolutionError`"
             raise AssertionError(message)
     except ArgumentsResolutionError:
-        if "rate limit exceeded" in str(sys.exc_info()[1]) and os.getenv("CI"):
+        if "rate limit exceeded" in get_exception_text() and os.getenv("CI"):
             # TODO: Remove this pending approval of
             # [this](https://github.com/1Password/for-open-source/issues/1337)
             pass

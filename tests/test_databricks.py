@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 
+from decorative_secrets._utilities import get_exception_text
 from decorative_secrets.databricks import (
     _install_databricks_cli,
     _install_sh_databricks_cli,
@@ -46,7 +47,7 @@ def test_get_secret(databricks_env: dict[str, str]) -> None:
             # TODO: Remove this pending approval of
             # [this](https://github.com/1Password/for-open-source/issues/1337)
             if not (
-                "rate limit exceeded" in str(sys.exc_info()[1])
+                "rate limit exceeded" in get_exception_text()
                 and os.getenv("CI")
             ):
                 raise
