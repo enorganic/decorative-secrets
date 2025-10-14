@@ -93,11 +93,27 @@ def _op_signin(account: str | None = None) -> str:
     return op
 
 
+def iter_op_account_list() -> Iterable[str]:
+    """
+    Yield all 1password account names.
+    """
+    op: str = which_op()
+    line: str
+    for line in check_output((op, "account", "list")).strip().split("\n")[1:]:
+        yield line.partition(" ")[0]
+
+
 def op_signin(account: str | None = None) -> str:
     """
     Sign in to 1Password using the CLI if not already signed in.
     """
-    return _op_signin(account or os.getenv("OP_ACCOUNT"))
+    account = account or os.getenv("OP_ACCOUNT")
+    if account:
+        return _op_signin(account)
+    op: str | None = None
+    for account in iter_op_account_list():
+        op = _op_signin(account)
+    return op or which_op()
 
 
 def _resolve_auth_arguments(
@@ -212,9 +228,8 @@ async def async_read_onepassword_secret(
             return await _async_resolve_connect_resource(token, host, resource)
         return await _async_resolve_resource(token, resource)
     op: str | None = None
-    if account:
-        with suppress(FileNotFoundError, CalledProcessError):
-            op = op_signin(account)
+    with suppress(FileNotFoundError, CalledProcessError):
+        op = op_signin(account)
     if not op:
         op = which_op() or "op"
     return check_output(
@@ -243,9 +258,8 @@ def _read_onepassword_secret(
             return _resolve_connect_resource(token, host, resource)
         return asyncio.run(_async_resolve_resource(token, resource))
     op: str | None = None
-    if account:
-        with suppress(FileNotFoundError, CalledProcessError):
-            op = op_signin(account)
+    with suppress(FileNotFoundError, CalledProcessError):
+        op = op_signin(account)
     if not op:
         op = which_op() or "op"
     return check_output(

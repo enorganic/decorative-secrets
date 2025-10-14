@@ -6,7 +6,7 @@ import sys
 from collections import deque
 from collections.abc import Coroutine
 from contextlib import suppress
-from functools import cache, update_wrapper, wraps
+from functools import cache, partial, update_wrapper, wraps
 from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
@@ -33,6 +33,12 @@ from decorative_secrets.errors import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
+
+
+def iscoroutinefunction(function: Any) -> bool:
+    if isinstance(function, partial):
+        return iscoroutinefunction(function.func)
+    return asyncio.iscoroutinefunction(function)
 
 
 def get_exception_text() -> str:
@@ -315,9 +321,9 @@ def apply_callback_arguments(  # noqa: C901
         36
     """
     message: str
-    if (callback is not None) and asyncio.iscoroutinefunction(callback):
+    if (callback is not None) and iscoroutinefunction(callback):
         raise TypeError(callback)
-    if (async_callback is not None) and not asyncio.iscoroutinefunction(
+    if (async_callback is not None) and not iscoroutinefunction(
         async_callback
     ):
         raise TypeError(async_callback)
@@ -442,7 +448,7 @@ def apply_callback_arguments(  # noqa: C901
             )
             return (args, kwargs)
 
-        if asyncio.iscoroutinefunction(function):
+        if iscoroutinefunction(function):
 
             @wraps(function)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:

@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
+from subprocess import CalledProcessError
 
 from decorative_secrets._utilities import check_output
 from decorative_secrets.environment import apply_environment_arguments
@@ -48,20 +49,38 @@ def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
     """
-    assert asyncio.run(
-        async_read_onepassword_secret(
-            f"op://{onepassword_vault}/Databricks Client/hostname"
+    try:
+        assert asyncio.run(
+            async_read_onepassword_secret(
+                f"op://{onepassword_vault}/Databricks Client/hostname",
+                account="my.1password.com",
+            )
         )
-    )
+    except CalledProcessError:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        if not (
+            "rate limit exceeded" in str(sys.exc_info()[1]) and os.getenv("CI")
+        ):
+            raise
 
 
 def test_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
     """
-    assert read_onepassword_secret(
-        f"op://{onepassword_vault}/Databricks Client/hostname"
-    )
+    try:
+        assert read_onepassword_secret(
+            f"op://{onepassword_vault}/Databricks Client/hostname",
+            account="my.1password.com",
+        )
+    except CalledProcessError:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        if not (
+            "rate limit exceeded" in str(sys.exc_info()[1]) and os.getenv("CI")
+        ):
+            raise
 
 
 def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
@@ -70,6 +89,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
     """
 
     @apply_onepassword_arguments(
+        onepassword_account="my.1password.com",
         databricks_host="databricks_host_onepassword",
         databricks_client_id="databricks_client_id_onepassword",
         databricks_client_secret=("databricks_client_secret_onepassword"),
@@ -96,25 +116,27 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             "databricks_client_secret": databricks_client_secret,
         }
 
-    credentials: dict[str, str] = infer_databricks_credentials(
-        databricks_host_onepassword=(
-            f"op://{onepassword_vault}/Databricks Client/hostname"
-        ),
-        databricks_client_id_onepassword=(
-            f"op://{onepassword_vault}/Databricks Client/username"
-        ),
-        databricks_client_secret_onepassword=(
-            f"op://{onepassword_vault}/Databricks Client/credential"
-        ),
-    )
-
     env: dict[str, str] = os.environ.copy()
     try:
-        # Test the same operation using a service account token
-        token: str = read_onepassword_secret(
-            f"op://{onepassword_vault}/62u4plbr2i7ueb4boywtbbyd24/credential"
+        credentials: dict[str, str] = infer_databricks_credentials(
+            databricks_host_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/hostname",
+            ),
+            databricks_client_id_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/username",
+            ),
+            databricks_client_secret_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/credential",
+            ),
         )
-        os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = token
+        # Test the same operation using a service account token
+        os.environ.setdefault(
+            "OP_SERVICE_ACCOUNT_TOKEN",
+            read_onepassword_secret(
+                f"op://{onepassword_vault}/"
+                "62u4plbr2i7ueb4boywtbbyd24/credential"
+            ),
+        )
         assert (
             infer_databricks_credentials(
                 databricks_host_onepassword=(

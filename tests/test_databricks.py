@@ -1,6 +1,6 @@
 import os
 import sys
-from subprocess import check_call
+from subprocess import CalledProcessError, check_call
 from typing import TYPE_CHECKING
 
 from databricks.sdk.errors.platform import ResourceDoesNotExist
@@ -31,16 +31,25 @@ def test_install_databricks_cli() -> None:
 
 
 def test_get_secret(databricks_env: dict[str, str]) -> None:
+    env: Mapping[str, str] = os.environ.copy()
     if not os.getenv("CI"):
         # If not running unsupervised, test interactive login
         assert os.getenv("DATABRICKS_HOST")
-        assert not os.getenv("DATABRICKS_CLIENT_ID")
-        assert not os.getenv("DATABRICKS_CLIENT_SECRET")
-        assert (
-            get_secret("decorative-secrets-test", "my-secret-key")
-            == "my-secret-value"
-        )
-    env: Mapping[str, str] = os.environ.copy()
+        os.environ.pop("DATABRICKS_CLIENT_ID", None)
+        os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
+        try:
+            assert (
+                get_secret("decorative-secrets-test", "my-secret-key")
+                == "my-secret-value"
+            )
+        except CalledProcessError:
+            # TODO: Remove this pending approval of
+            # [this](https://github.com/1Password/for-open-source/issues/1337)
+            if not (
+                "rate limit exceeded" in str(sys.exc_info()[1])
+                and os.getenv("CI")
+            ):
+                raise
     try:
         os.environ.update(databricks_env)
         assert (
