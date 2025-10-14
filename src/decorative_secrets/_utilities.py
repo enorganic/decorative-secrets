@@ -373,12 +373,17 @@ def apply_callback_arguments(  # noqa: C901
             )
             # For any arguments where we have callback arguments and do not
             # have an explicitly passed value, execute the callback
-            unused_callback_parameter_names: set[str] = set(
-                callback_parameter_names.values()
-            ) & set(kwargs.keys())
+            key: str
+            value: Any
+            used_keys: set[str] = {
+                key for key, value in kwargs.items() if value is not None
+            }
+            unused_callback_parameter_names: set[str] = (
+                set(callback_parameter_names.values()) & used_keys
+            )
             parameter_name: str
-            for parameter_name in set(callback_parameter_names.keys()) - set(
-                kwargs.keys()
+            for parameter_name in (
+                set(callback_parameter_names.keys()) - used_keys
             ):
                 callback_parameter_name: str = callback_parameter_names[
                     parameter_name

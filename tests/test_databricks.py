@@ -1,6 +1,5 @@
 import os
 import sys
-from subprocess import check_call
 from typing import TYPE_CHECKING
 
 from databricks.sdk.errors.platform import ResourceDoesNotExist
@@ -8,7 +7,7 @@ from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
 
-from decorative_secrets._utilities import get_exception_text
+from decorative_secrets._utilities import check_output, get_exception_text
 from decorative_secrets.databricks import (
     _install_databricks_cli,
     _install_sh_databricks_cli,
@@ -114,4 +113,4 @@ def test_apply_databricks_secret_arguments(
 
 
 if __name__ == "__main__":
-    check_call([sys.executable, "-m", "pytest", "-s", "-vv", __file__])
+    check_output((sys.executable, "-m", "pytest", "-s", "-vv", __file__))
