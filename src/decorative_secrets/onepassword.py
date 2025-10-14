@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 import sys
@@ -270,12 +271,11 @@ def _read_onepassword_secret(
     )
 
 
-def read_onepassword_secret(
+def get_onepassword_secret(
     resource: str,
     account: str | None = None,
     token: str | None = None,
     host: str | None = None,
-    **env: str,  # noqa: ARG001
 ) -> str:
     """
     Read a secret from 1Password using either the `onepassword-sdk` or
@@ -299,6 +299,10 @@ def read_onepassword_secret(
     return _read_onepassword_secret(
         resource, account=account, token=token, host=host, **os.environ
     )
+
+
+# For backward compatibility
+read_onepassword_secret = get_onepassword_secret  # type: ignore[assignment]
 
 
 def apply_onepassword_arguments(
@@ -421,3 +425,81 @@ def apply_onepassword_arguments(
         onepassword_resource_arguments,
         **kwargs,
     )
+
+
+def _print_help() -> None:
+    print(  # noqa: T201
+        "Usage:\n"
+        "  decorative-secrets onepassword <command> [options]\n\n"
+        "Commands:\n"
+        "  install\n"
+        "  get"
+    )
+
+
+def _get_command() -> str:
+    command: str = ""
+    if len(sys.argv) > 1:
+        command = sys.argv.pop(1).lower().replace("_", "-")
+    return command
+
+
+def main() -> None:
+    """
+    Run a command:
+    -   install: Install the Databricks CLI if not already installed
+    -   get: Get a secret from Databricks and print it to stdout
+    """
+    command = _get_command()
+    if command in ("--help", "-h"):
+        _print_help()
+        return
+    parser: argparse.ArgumentParser
+    if command == "install":
+        parser = argparse.ArgumentParser(
+            prog="decorative-secrets onepassword install",
+            description="Install the 1Password CLI",
+        )
+        parser.parse_args()
+        _install_op()
+    elif command == "get":
+        parser = argparse.ArgumentParser(
+            prog="decorative-secrets onepassword get",
+            description="Get a secret from 1Password",
+        )
+        parser.add_argument(
+            "reference",
+            type=str,
+        )
+        parser.add_argument(
+            "--account",
+            default=None,
+            type=str,
+            help="Which 1Password account to use",
+        )
+        parser.add_argument(
+            "-t",
+            "--token",
+            default=None,
+            type=str,
+            help="A 1Password Service Account Token",
+        )
+        parser.add_argument(
+            "--host",
+            default=None,
+            type=str,
+            help="A 1Password Connect Host URL",
+        )
+        namespace: argparse.Namespace = parser.parse_args()
+        print(  # noqa: T201
+            read_onepassword_secret(
+                namespace.reference,
+                host=namespace.host,
+                account=namespace.account,
+                token=namespace.token,
+            )
+        )
+
+
+if __name__ == "__main__":
+    main()

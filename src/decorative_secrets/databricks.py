@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from contextlib import suppress
 from functools import cache, partial
 from shutil import which
-from subprocess import CalledProcessError, check_output
+from subprocess import CalledProcessError
 from typing import TYPE_CHECKING
 from urllib.request import urlopen
 
@@ -13,6 +14,7 @@ from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
     apply_callback_arguments,
+    check_output,
     which_brew,
     which_winget,
 )
@@ -701,3 +703,103 @@ def apply_databricks_secrets_arguments(
         databricks_secret_arguments,
         **kwargs,
     )
+
+
+def _print_help() -> None:
+    print(  # noqa: T201
+        "Usage:\n"
+        "  decorative-secrets databricks <command> [options]\n\n"
+        "Commands:\n"
+        "  install\n"
+        "  get"
+    )
+
+
+def _get_command() -> str:
+    command: str = ""
+    if len(sys.argv) > 1:
+        command = sys.argv.pop(1).lower().replace("_", "-")
+    return command
+
+
+def main() -> None:
+    """
+    Run a command:
+    -   install: Install the Databricks CLI if not already installed
+    -   get: Get a secret from Databricks and print it to stdout
+    """
+    command = _get_command()
+    if command in ("--help", "-h"):
+        _print_help()
+        return
+    parser: argparse.ArgumentParser
+    if command == "install":
+        parser = argparse.ArgumentParser(
+            prog="decorative-secrets databricks install",
+            description="Install the Databricks CLI",
+        )
+        parser.parse_args()
+        _install_databricks_cli()
+    elif command == "get":
+        parser = argparse.ArgumentParser(
+            prog="decorative-secrets databricks get",
+            description="Get a secret from Databricks",
+        )
+        parser.add_argument(
+            "scope",
+            type=str,
+        )
+        parser.add_argument(
+            "key",
+            type=str,
+        )
+        parser.add_argument(
+            "--host",
+            default=None,
+            type=str,
+            help="A Databricks workspace host URL",
+        )
+        parser.add_argument(
+            "-cid",
+            "--client-id",
+            default=None,
+            type=str,
+            help="A Databricks OAuth2 Client ID",
+        )
+        parser.add_argument(
+            "-cs",
+            "--client-secret",
+            default=None,
+            type=str,
+            help="A Databricks OAuth2 Client Secret",
+        )
+        parser.add_argument(
+            "-t",
+            "--token",
+            default=None,
+            type=str,
+            help="A Databricks Personal Access Token",
+        )
+        parser.add_argument(
+            "-p",
+            "--profile",
+            default=None,
+            type=str,
+            help="A Databricks Configuration Profile",
+        )
+        namespace: argparse.Namespace = parser.parse_args()
+        print(  # noqa: T201
+            get_databricks_secret(
+                namespace.scope,
+                namespace.key,
+                host=namespace.host,
+                client_id=namespace.client_id,
+                client_secret=namespace.client_secret,
+                token=namespace.token,
+                profile=namespace.profile,
+            )
+        )
+
+
+if __name__ == "__main__":
+    main()
