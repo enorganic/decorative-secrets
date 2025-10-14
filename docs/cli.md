@@ -1,6 +1,6 @@
 # Command Line Interface
 
-This library is primarily intended for use as a library, however exposes a
+This package is primarily intended for use as a library, however exposes a
 handful of utility commands for shell use.
 
 ```console
