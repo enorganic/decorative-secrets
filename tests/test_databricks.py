@@ -13,7 +13,7 @@ from decorative_secrets.databricks import (
     _install_databricks_cli,
     _install_sh_databricks_cli,
     apply_databricks_secrets_arguments,
-    get_secret,
+    get_databricks_secret,
 )
 
 if TYPE_CHECKING:
@@ -43,7 +43,9 @@ def test_get_secret(databricks_env: dict[str, str]) -> None:
         os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
         try:
             assert (
-                get_secret("decorative-secrets-test", "my-secret-key")
+                get_databricks_secret(
+                    "decorative-secrets-test", "my-secret-key"
+                )
                 == "my-secret-value"
             )
         except RateLimitExceededException:
@@ -64,11 +66,13 @@ def test_get_secret(databricks_env: dict[str, str]) -> None:
     try:
         os.environ.update(databricks_env)
         assert (
-            get_secret("decorative-secrets-test", "my-secret-key")
+            get_databricks_secret("decorative-secrets-test", "my-secret-key")
             == "my-secret-value"
         )
         try:
-            get_secret("decorative-secrets-test", "my-fake-secret-key")
+            get_databricks_secret(
+                "decorative-secrets-test", "my-fake-secret-key"
+            )
         except ResourceDoesNotExist:
             pass
         else:

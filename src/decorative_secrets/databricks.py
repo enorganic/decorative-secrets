@@ -414,7 +414,7 @@ def _get_secret(
     return dbutils.secrets.get(scope, key)
 
 
-def get_secret(
+def get_databricks_secret(
     scope: str,
     key: str,
     host: str | None = None,
@@ -511,7 +511,7 @@ def _get_scope_key_secret(
 ) -> str:
     if isinstance(scope_key, str):
         scope_key = scope_key.partition("/")[::2]
-    return get_secret(
+    return get_databricks_secret(
         *scope_key,
         host=host,
         account_id=account_id,
