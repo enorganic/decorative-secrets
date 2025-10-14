@@ -2,7 +2,6 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
-from subprocess import CalledProcessError
 
 from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
@@ -64,7 +63,7 @@ def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
         pass
-    except CalledProcessError:
+    except Exception:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
         if not (
@@ -86,7 +85,7 @@ def test_read_onepassword_secret(onepassword_vault: str) -> None:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
         pass
-    except CalledProcessError:
+    except Exception:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
         if not (

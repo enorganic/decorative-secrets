@@ -1,6 +1,6 @@
 import os
 import sys
-from subprocess import CalledProcessError, check_call
+from subprocess import check_call
 from typing import TYPE_CHECKING
 
 from databricks.sdk.errors.platform import ResourceDoesNotExist
@@ -50,7 +50,7 @@ def test_get_secret(databricks_env: dict[str, str]) -> None:
             # TODO: Remove this pending approval of
             # [this](https://github.com/1Password/for-open-source/issues/1337)
             pass
-        except CalledProcessError:
+        except Exception:
             # TODO: Remove this pending approval of
             # [this](https://github.com/1Password/for-open-source/issues/1337)
             if not (
