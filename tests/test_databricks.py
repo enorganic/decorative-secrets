@@ -58,6 +58,9 @@ def test_get_secret(databricks_env: dict[str, str]) -> None:
                 and os.getenv("CI")
             ):
                 raise
+        finally:
+            os.environ.clear()
+            os.environ.update(env)
     try:
         os.environ.update(databricks_env)
         assert (
