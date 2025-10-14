@@ -14,7 +14,6 @@ from subprocess import (
     DEVNULL,
     PIPE,
     CalledProcessError,
-    check_call,
     list2cmdline,
     run,
 )
@@ -55,6 +54,7 @@ def check_output(
     args: tuple[str, ...],
     cwd: str | Path = "",
     input: str | bytes | None = None,  # noqa: A002
+    env: Mapping[str, str] | None = None,
     *,
     echo: bool = False,
 ) -> str:
@@ -79,6 +79,7 @@ def check_output(
             check=True,
             cwd=cwd or None,
             input=input,
+            env=env,
         )
         .stdout.rstrip()
         .decode("utf-8", errors="ignore")
@@ -104,7 +105,7 @@ def install_brew() -> None:
         urlopen(HOMEBREW_INSTALL_SH)  # noqa: S310
     ) as response_io:
         try:
-            check_call(
+            check_output(
                 (bash, "-c", response_io.read()),
                 env=env,
             )
