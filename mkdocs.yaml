@@ -4,6 +4,7 @@ repo_url: https://github.com/enorganic/decorative-secrets/
 edit_uri: blob/main/docs/
 nav:
 - Introduction: 'index.md'
+- CLI Reference: 'cli.md'
 - API Reference:
     - databricks: 'api/databricks.md'
     - onepassword: 'api/onepassword.md'

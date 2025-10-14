@@ -1,5 +1,8 @@
 # Command Line Interface
 
+This library is primarily intended for use as a library, however exposes a
+handful of utility commands for shell use.
+
 ```console
 $ decorative-secrets -h
 Usage:
