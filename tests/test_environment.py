@@ -1,6 +1,10 @@
 import os
 from subprocess import CalledProcessError
 
+from onepassword.errors import (  # type: ignore[import-untyped]
+    RateLimitExceededException,
+)
+
 from decorative_secrets._utilities import get_exception_text
 from decorative_secrets.environment import apply_environment_arguments
 from decorative_secrets.onepassword import read_onepassword_secret
@@ -25,6 +29,10 @@ def test_apply_environment_arguments(onepassword_vault: str) -> None:
         assert get_token(
             token_environment_variable="OP_SERVICE_ACCOUNT_TOKEN"
         ) == get_token(token=os.getenv("OP_SERVICE_ACCOUNT_TOKEN"))
+    except RateLimitExceededException:
+        # TODO: Remove this pending approval of
+        # [this](https://github.com/1Password/for-open-source/issues/1337)
+        pass
     except CalledProcessError:
         # TODO: Remove this pending approval of
         # [this](https://github.com/1Password/for-open-source/issues/1337)
