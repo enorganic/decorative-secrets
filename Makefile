@@ -16,7 +16,7 @@ reinstall:
 	{ hatch --version || pipx install --upgrade hatch || python3 -m pip install --upgrade hatch ; } && \
 	hatch env prune && \
 	make && \
-	make requirements
+	make update
 
 distribute:
 	hatch build && hatch publish && rm -rf dist
