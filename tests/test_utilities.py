@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import sys
 from contextlib import suppress
-from subprocess import check_output
 
 from decorative_secrets._utilities import (
     apply_callback_arguments,
@@ -13,6 +12,7 @@ from decorative_secrets._utilities import (
 from decorative_secrets.errors import (
     HomebrewNotInstalledError,
 )
+from decorative_secrets.subprocess import check_output
 
 
 def test_install_brew() -> None:

@@ -24,7 +24,6 @@ from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
 
 from decorative_secrets._utilities import (  # type: ignore[import-untyped]
     apply_callback_arguments,
-    check_output,
     which_brew,
     which_winget,
 )
@@ -32,6 +31,7 @@ from decorative_secrets.errors import (
     OnePasswordCommandLineInterfaceNotInstalledError,
     WinGetNotInstalledError,
 )
+from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Mapping
