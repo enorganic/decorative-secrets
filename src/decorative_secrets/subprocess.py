@@ -87,7 +87,7 @@ def check_output(
         if text is None
         else (
             # str
-            completed_process.stdout.rstrip().decode("utf-8", errors="ignore")
+            completed_process.stdout.rstrip().encode("utf-8", errors="ignore")
         )
         if text
         # bytes
