@@ -11,11 +11,7 @@ from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
 from subprocess import (
-    DEVNULL,
-    PIPE,
     CalledProcessError,
-    list2cmdline,
-    run,
 )
 from traceback import format_exception
 from typing import TYPE_CHECKING, Any
@@ -28,10 +24,10 @@ from decorative_secrets.errors import (
     HomebrewNotInstalledError,
     WinGetNotInstalledError,
 )
+from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
-    from pathlib import Path
 
 
 def iscoroutinefunction(function: Any) -> bool:
@@ -48,45 +44,6 @@ def get_exception_text() -> str:
     printing.
     """
     return "".join(format_exception(*sys.exc_info()))
-
-
-def check_output(
-    args: tuple[str, ...],
-    cwd: str | Path = "",
-    input: str | bytes | None = None,  # noqa: A002
-    env: Mapping[str, str] | None = None,
-    *,
-    echo: bool = False,
-) -> str:
-    """
-    This function mimics `subprocess.check_output`, but redirects stderr
-    to DEVNULL, and ignores unicode decoding errors.
-
-    Parameters:
-
-    - command (tuple[str, ...]): The command to run
-    """
-    if echo:
-        if cwd:
-            print("$", "cd", cwd, "&&", list2cmdline(args))  # noqa: T201
-        else:
-            print("$", list2cmdline(args))  # noqa: T201
-    output: str = (
-        run(
-            args,
-            stdout=PIPE,
-            stderr=DEVNULL,
-            check=True,
-            cwd=cwd or None,
-            input=input,
-            env=env,
-        )
-        .stdout.rstrip()
-        .decode("utf-8", errors="ignore")
-    )
-    if echo:
-        print(output)  # noqa: T201
-    return output
 
 
 HOMEBREW_INSTALL_SH: str = (
