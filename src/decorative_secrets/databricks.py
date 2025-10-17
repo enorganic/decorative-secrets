@@ -14,6 +14,7 @@ from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
     apply_callback_arguments,
+    check_output,
     which_brew,
     which_winget,
 )
@@ -21,7 +22,6 @@ from decorative_secrets.errors import (
     DatabricksCLINotInstalledError,
     HomebrewNotInstalledError,
 )
-from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
