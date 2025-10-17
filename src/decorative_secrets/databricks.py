@@ -21,7 +21,7 @@ from decorative_secrets.errors import (
     DatabricksCLINotInstalledError,
     HomebrewNotInstalledError,
 )
-from decorative_secrets.subprocess import check_output
+from decorative_secrets.subprocess import check_call, check_output
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -41,7 +41,7 @@ def _install_sh_databricks_cli() -> None:
     ) as install_io:
         sh: str = which("sh") or "sh"
         try:
-            check_output((sh,), input=install_io.read())
+            check_call((sh,), input=install_io.read())
         except (CalledProcessError, FileNotFoundError) as error:
             if (
                 (not isinstance(error, CalledProcessError))
@@ -104,13 +104,11 @@ def _databricks_auth_login(host: str | None = None) -> None:
         host = os.getenv("DATABRICKS_HOST")
     databricks = which_databricks()
     if host:
-        check_output(
-            (databricks, "auth", "login", "--host", host), input=b"\n"
-        )
+        check_call((databricks, "auth", "login", "--host", host), input=b"\n")
     else:
         # Automatically select the default/first profile if no host
         # is specified
-        check_output((databricks, "auth", "login"), input=b"\n\n")
+        check_call((databricks, "auth", "login"), input=b"\n\n")
 
 
 def databricks_auth_login(host: str | None = None) -> None:

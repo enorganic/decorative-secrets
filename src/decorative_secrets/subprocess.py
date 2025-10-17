@@ -72,6 +72,8 @@ def check_output(
             print("$", "cd", cwd, "&&", list2cmdline(args))  # noqa: T201
         else:
             print("$", list2cmdline(args))  # noqa: T201
+    if isinstance(input, bytes) and text:
+        input = input.decode("utf-8", errors="ignore")  # noqa: A001
     completed_process: CompletedProcess = run(
         args,
         stdout=PIPE,
@@ -82,17 +84,17 @@ def check_output(
         env=env,
         text=text,
     )
-    output: str | bytes | None = (
-        (None)
-        if text is None
-        else (
-            # str
-            completed_process.stdout.rstrip().encode("utf-8", errors="ignore")
-        )
-        if text
-        # bytes
-        else (completed_process.stdout.rstrip())
-    )
+    output: str | bytes | None = None
+    if text is None:
+        pass
+    elif text:
+        output = completed_process.stdout.rstrip()
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="ignore")
+    else:
+        output = completed_process.stdout.rstrip()
+        if isinstance(output, str):
+            output = output.encode("utf-8", errors="ignore")
     if echo and (output is not None):
         print(output)  # noqa: T201
     return output
