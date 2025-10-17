@@ -21,29 +21,19 @@ reinstall:
 distribute:
 	hatch build && hatch publish && rm -rf dist
 
-# This will upgrade all requirements, and refresh pinned requirements to
-# match. The same can be accomplished with `make reinstall`, but this
+# This will upgrade all dependencies to the latest compatible version.
+# The same can be accomplished with `make reinstall`, but this
 # runs faster, because environments are not recreated.
 upgrade:
 	hatch run dependence upgrade\
 	 --include-pointer /tool/hatch/envs/default\
 	 --include-pointer /project\
-	 -aen all\
 	 pyproject.toml && \
 	hatch run docs:dependence upgrade\
 	 --include-pointer /tool/hatch/envs/docs\
-	 --include-pointer /project\
-	 -aen all\
-	 pyproject.toml && \
-	hatch run hatch-static-analysis:dependence upgrade\
-	 --include-pointer /tool/hatch/envs/hatch-static-analysis\
-	 --include-pointer /project\
-	 -aen all\
 	 pyproject.toml && \
 	hatch run hatch-test.py$(MINIMUM_PYTHON_VERSION):dependence upgrade\
 	 --include-pointer /tool/hatch/envs/hatch-test\
-	 --include-pointer /project\
-	 -aen all\
 	 pyproject.toml
 
 # This will align project dependency versions with those installed in the
