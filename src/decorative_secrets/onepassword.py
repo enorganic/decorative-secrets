@@ -5,6 +5,7 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
+from dataclasses import dataclass
 from functools import cache, partial
 from importlib.metadata import distribution
 from shutil import which
@@ -34,7 +35,7 @@ from decorative_secrets.errors import (
 from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Iterable, Mapping
+    from collections.abc import Callable, Coroutine, Iterable
 
     from onepassword import Secrets  # type: ignore[import-untyped]
     from onepasswordconnectsdk.models.field import (  # type: ignore[import-untyped]
@@ -43,6 +44,102 @@ if TYPE_CHECKING:
 
 _INTEGRATION_NAME: str = "decorative-secrets"
 _INTEGRATION_VERSION: str = distribution("decorative-secrets").version
+
+
+def apply_onepassword_arguments(
+    *args: ApplyOnepasswordArgumentsOptions,
+    **kwargs: str,
+) -> Callable:
+    """
+    This decorator maps parameter names to 1Password resources.
+    Each key represents the name of a parameter in the decorated function
+    which accepts an explicit input, and the corresponding mapped value is a
+    parameter name accepting a resource path with which to lookup a secret
+    to pass to the mapped parameter in lieu of an explicitly provided
+    argument.
+
+    Parameters:
+        *args: An optional [ApplyOnepasswordArgumentsOptions
+            ](./#decorative_secrets.onepassword.ApplyOnepasswordArgumentsOptions)
+            instance governing the behavior of this decorator. If not provided,
+            a default instance of [ApplyOnepasswordArgumentsOptions()
+            ](./#decorative_secrets.onepassword.ApplyOnepasswordArgumentsOptions)
+            will be used. If multiple instances are provided, only the first
+            will be used.
+        **kwargs:
+            A mapping of static parameter names to the parameter names
+            of arguments accepting 1Password resource paths from which to
+            retrieve the value when the key argument is not explicitly
+            provided.
+
+    Example:
+        ```python
+        from functools import (
+            cache,
+        )
+        from decorative_secrets.onepassword import (
+            apply_onepassword_arguments,
+        )
+        from my_client_sdk import (
+            Client,
+        )
+
+
+        @cache
+        @apply_onepassword_arguments(
+            client_id="client_id_onepassword",
+            client_secret="client_secret_onepassword",
+        )
+        def get_client(
+            client_id: str | None = None,
+            client_secret: str = None,
+            client_id_onepassword: str | None = None,
+            client_secret_onepassword: str | None = None,
+        ) -> Client:
+            return Client(
+                oauth2_client_id=client_id,
+                oauth2_client_secret=client_secret,
+            )
+
+
+        client: Client = get_client(
+            client_id_onepassword=(
+                "op://Vault Name/Client ID Item Name/username",
+            ),
+            client_secret_onepassword=(
+                "op://Vault Name/Client Secret Item Name/credential",
+            ),
+        )
+        ```
+    """
+    options: ApplyOnepasswordArgumentsOptions
+    args, options = _get_args_options(*args)
+    read_onepassword_secret_: Callable[..., str] = read_onepassword_secret
+    async_read_onepassword_secret_: Callable[
+        [str, str | None, str | None, str | None], Coroutine[Any, Any, str]
+    ] = async_read_onepassword_secret
+    if (
+        (options.account is not None)
+        or (options.token is not None)
+        or (options.host is not None)
+    ):
+        read_onepassword_secret_ = partial(
+            read_onepassword_secret_,
+            **({"account": options.account} if options.account else {}),
+            **({"token": options.token} if options.token else {}),
+            **({"host": options.host} if options.host else {}),
+        )
+        async_read_onepassword_secret_ = partial(
+            async_read_onepassword_secret_,
+            **({"account": options.account} if options.account else {}),
+            **({"token": options.token} if options.token else {}),
+            **({"host": options.host} if options.host else {}),
+        )
+    return apply_callback_arguments(
+        read_onepassword_secret_,
+        async_read_onepassword_secret_,
+        **kwargs,
+    )
 
 
 def _install_op() -> None:
@@ -305,126 +402,48 @@ def get_onepassword_secret(
 read_onepassword_secret = get_onepassword_secret  # type: ignore[assignment]
 
 
-def apply_onepassword_arguments(
-    onepassword_resource_arguments: (
-        Mapping[str, str] | Iterable[tuple[str, str]]
-    ) = (),
-    onepassword_account: str | None = None,
-    onepassword_token: str | None = None,
-    onepassword_connect_host: str | None = None,
-    **kwargs: str,
-) -> Callable:
+@dataclass(frozen=True)
+class ApplyOnepasswordArgumentsOptions:
     """
-    This decorator maps parameter names to 1Password resources.
-    Each key represents the name of a parameter in the decorated function
-    which accepts an explicit input, and the corresponding mapped value is a
-    parameter name accepting a resource path with which to lookup a secret
-    to pass to the mapped parameter in lieu of an explicitly provided
-    argument.
+    This class contains options governing the behavior of the
+    [apply_onepassword_arguments
+    ](./#decorative_secrets.onepassword.apply_onepassword_arguments) decorator.
 
-    Parameters:
-        onepassword_resource_arguments:
-            A mapping of static parameter names to the parameter names
-            of arguments accepting 1Password resource paths from which to
-            retrieve the value when the key argument is not explicitly
-            provided.
-        onepassword_account: A 1Password account URL. For example, individuals
+    Attributes:
+        account: A 1Password account URL. For example, individuals
             and families will use "my.1password.com", while teams and
             businesses will use a custom subdomain. If not provided, the
             `OP_ACCOUNT` environment variable will be used, if set. This is
             only necessary when using the 1Password CLI where multiple
             accounts are configured, and if no token is provided or inferred
             from an environment variable.
-        onepassword_token: A 1Password or 1Password connect service account
+        token: A 1Password or 1Password connect service account
             token. If not provided, the `OP_SERVICE_ACCOUNT_TOKEN` or
             `OP_CONNECT_TOKEN` environment variables will be used, if set.
-        onepassword_connect_host: A 1Password Connect host URL. If not
+        host: A 1Password Connect host URL. If not
             provided, the `OP_CONNECT_HOST` environment variable will be used,
             if set. This is required when using a self-hosted 1Password
             Connect server.
-        kwargs: In lieu of passing a dictionary to
-            `onepassword_resource_arguments`, the same mapping may be
-            provided as keyword arguments.
-
-    Example:
-        ```python
-        from functools import (
-            cache,
-        )
-        from decorative_secrets.onepassword import (
-            apply_onepassword_arguments,
-        )
-        from my_client_sdk import (
-            Client,
-        )
-
-
-        @cache
-        @apply_onepassword_arguments(
-            client_id="client_id_onepassword",
-            client_secret="client_secret_onepassword",
-        )
-        def get_client(
-            client_id: str | None = None,
-            client_secret: str = None,
-            client_id_onepassword: str | None = None,
-            client_secret_onepassword: str | None = None,
-        ) -> Client:
-            return Client(
-                oauth2_client_id=client_id,
-                oauth2_client_secret=client_secret,
-            )
-
-
-        client: Client = get_client(
-            client_id_onepassword=(
-                "op://Vault Name/Client ID Item Name/username",
-            ),
-            client_secret_onepassword=(
-                "op://Vault Name/Client Secret Item Name/credential",
-            ),
-        )
-        ```
     """
-    read_onepassword_secret_: Callable[..., str] = read_onepassword_secret
-    async_read_onepassword_secret_: Callable[
-        [str, str | None, str | None, str | None], Coroutine[Any, Any, str]
-    ] = async_read_onepassword_secret
-    if (
-        (onepassword_account is not None)
-        or (onepassword_token is not None)
-        or (onepassword_connect_host is not None)
-    ):
-        read_onepassword_secret_ = partial(
-            read_onepassword_secret_,
-            **(
-                {"account": onepassword_account} if onepassword_account else {}
-            ),
-            **({"token": onepassword_token} if onepassword_token else {}),
-            **(
-                {"host": onepassword_connect_host}
-                if onepassword_connect_host
-                else {}
-            ),
-        )
-        async_read_onepassword_secret_ = partial(
-            async_read_onepassword_secret_,
-            **(
-                {"account": onepassword_account} if onepassword_account else {}
-            ),
-            **({"token": onepassword_token} if onepassword_token else {}),
-            **(
-                {"host": onepassword_connect_host}
-                if onepassword_connect_host
-                else {}
-            ),
-        )
-    return apply_callback_arguments(
-        read_onepassword_secret_,
-        async_read_onepassword_secret_,
-        onepassword_resource_arguments,
-        **kwargs,
-    )
+
+    account: str | None = None
+    token: str | None = None
+    host: str | None = None
+
+
+def _get_args_options(
+    *args: Any,
+) -> tuple[tuple[Any, ...], ApplyOnepasswordArgumentsOptions]:
+    """
+    This function extracts an `ApplyEnvironmentArgumentsOptions` instance
+    from the provided arguments, if one is present.
+    """
+    index: int
+    value: Any
+    for index, value in enumerate(args):
+        if isinstance(value, ApplyOnepasswordArgumentsOptions):
+            return (*args[:index], *args[index + 1 :]), value
+    return args, ApplyOnepasswordArgumentsOptions()
 
 
 def _print_help() -> None:

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import wraps
 from inspect import Signature, iscoroutinefunction, signature
 from typing import Any
@@ -8,6 +9,11 @@ from decorative_secrets._utilities import (
     get_signature_parameter_names_defaults,
     merge_function_signature_args_kwargs,
     unwrap_function,
+)
+
+__all__: tuple[str, ...] = (
+    "apply_conditional_defaults",
+    "ApplyConditionalDefaultsOptions",
 )
 
 
@@ -25,7 +31,11 @@ def apply_conditional_defaults(
             function's arguments and returns a boolean value indicating
             whether or not to apply the default argument values.
         *default_args: A set of positional argument values to apply as
-            defaults if the condition is met.
+            defaults if the condition is met. Note: If any of these arguments
+            are an instance of [ApplyConditionalDefaultsOptions
+            ](./#decorative_secrets.defaults.ApplyConditionalDefaultsOptions),
+            the options will be used to determine decorator behavior, and will
+            be redacted from the arguments passed to the decorated function.
         **default_kwargs: A set of keyword argument values to apply as
             defaults if the condition is met.
 
@@ -67,6 +77,8 @@ def apply_conditional_defaults(
         # ('dev', '/in/dev', '/out/dev')
         ```
     """
+    options: ApplyConditionalDefaultsOptions
+    default_args, options = _get_args_options(*default_args)
 
     def decorating_function(
         function: Callable[..., Any],
@@ -97,13 +109,13 @@ def apply_conditional_defaults(
                 function_signature
             ).items():
                 if (
-                    (value is None)
+                    options.filter_parameter_defaults
+                    and (value in options.filter_parameter_defaults)
                     and (key in kwargs)
-                    and (kwargs[key] is None)
+                    and (kwargs[key] == value)
                 ):
-                    # If the keyword argument value is explicitly `None`,
-                    # and the parameter default is also `None`, we will infer
-                    # a `None` default has been passed-through and drop it
+                    # If the keyword argument value is one of the filtered
+                    # default values, and equals the parameter default—drop it
                     # from the `kwargs` dictionary to allow the argument
                     # to be superseded by any applicable conditional defaults.
                     del kwargs[key]
@@ -148,3 +160,85 @@ def apply_conditional_defaults(
         return wrapper
 
     return decorating_function
+
+
+@dataclass(frozen=True)
+class ApplyConditionalDefaultsOptions:
+    """
+    This class contains options governing the behavior of the
+    [apply_conditional_defaults
+    ](./#decorative_secrets.defaults.apply_conditional_defaults) decorator.
+
+    Attributes:
+        filter_parameter_defaults: This may either be:
+
+            1.  A tuple of values which should be filtered out of keyword
+                arguments when both the passed keyword argument value *and*
+                the parameter default value in the function signature
+                are one of these values.
+            2.  A dictionary mapping parameter names to tuples of values
+                applying the filtering logic described above on a per-parameter
+                basis.
+
+            Defaults to `()`—indicating no filtering should occur.
+
+    Examples:
+        ```python
+        from decorative_secrets.defaults import (
+            apply_conditional_defaults,
+            ApplyConditionalDefaultsOptions,
+        )
+        @apply_conditional_defaults(
+            lambda environment: environment == "prod",
+            ApplyConditionalDefaultsOptions(filter_parameter_defaults=(None,)),
+            source_directory="/in/prod",
+            target_directory="/out/prod",
+        )
+        @apply_conditional_defaults(
+            lambda environment: environment == "dev",
+            ApplyConditionalDefaultsOptions(filter_parameter_defaults=(None,)),
+            source_directory="/in/dev",
+            target_directory="/out/dev",
+        )
+        @apply_conditional_defaults(
+            lambda environment: environment == "stage",
+            ApplyConditionalDefaultsOptions(filter_parameter_defaults=(None,)),
+            source_directory="/in/stage",
+            target_directory="/out/stage",
+        )
+        def get_environment_source_target(
+            environment: str = "dev",
+            source_directory: str | None = None,
+            target_directory: str | None = None,
+        ) -> tuple[str, str | None, str | None]:
+            return (environment, source_directory, target_directory)
+
+        get_environment_source_target("stage", None, None)
+        # ('stage', '/in/stage', '/out/stage')
+
+        get_environment_source_target(environment="prod", None, None)
+        # ('prod', '/in/prod', '/out/prod')
+
+        get_environment_source_target(None, None, None)
+        # ('dev', '/in/dev', '/out/dev')
+        ```
+    """
+
+    filter_parameter_defaults: (
+        tuple[Any, ...] | dict[str, tuple[Any, ...]]
+    ) = ()
+
+
+def _get_args_options(
+    *args: Any,
+) -> tuple[tuple[Any, ...], ApplyConditionalDefaultsOptions]:
+    """
+    This function extracts an `ApplyConditionalDefaultsOptions` instance
+    from the provided arguments, if one is present.
+    """
+    index: int
+    value: Any
+    for index, value in enumerate(args):
+        if isinstance(value, ApplyConditionalDefaultsOptions):
+            return (*args[:index], *args[index + 1 :]), value
+    return args, ApplyConditionalDefaultsOptions()
