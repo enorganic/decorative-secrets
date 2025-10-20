@@ -23,10 +23,10 @@ from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
 )
 
 from decorative_secrets._utilities import (  # type: ignore[import-untyped]
-    apply_callback_arguments,
     which_brew,
     which_winget,
 )
+from decorative_secrets.callback import apply_callback_arguments
 from decorative_secrets.errors import (
     OnePasswordCommandLineInterfaceNotInstalledError,
     WinGetNotInstalledError,

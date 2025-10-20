@@ -10,7 +10,9 @@ nav:
     - onepassword: 'api/onepassword.md'
     - environment: 'api/environment.md'
     - defaults: 'api/defaults.md'
+    - callback: 'api/callback.md'
 - Contributing: 'contributing.md'
+- License: 'license.md'
 theme:
   name: material
   color_mode: auto
