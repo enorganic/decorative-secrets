@@ -31,6 +31,80 @@ if TYPE_CHECKING:
     from databricks.sdk.dbutils import RemoteDbUtils
 
 
+def apply_databricks_secrets_arguments(
+    *args: Config,
+    **kwargs: str,
+) -> Callable:
+    """
+    This decorator maps parameter names to Databricks secrets.
+    Each key in `databricks_secret_arguments` represents the name of a
+    parameter in the decorated function which accepts an explicit input, and
+    the corresponding mapped value is a parameter name accepting a tuple with
+    the secret scope and key with which to lookup a secret to pass to the
+    mapped parameter in lieu of an explicitly provided argument.
+
+    Parameters:
+        *args: A `databricks.sdk.Config` instance to configure
+            a workspace client when retrieving secrets remotely
+            (if more than one  is provided, only the first is used).
+        **kwargs: A mapping of static parameter names to the parameter names
+            of arguments accepting Databricks secret scope + key tuples
+            from which to retrieve a value when the key argument is not
+            explicitly provided.
+
+    Example:
+        ```python
+        from functools import (
+            cache,
+        )
+        from decorative_secrets.databricks import (
+            apply_databricks_secret_arguments,
+        )
+        from my_client_sdk import (
+            Client,
+        )
+
+
+        @cache
+        @apply_databricks_secret_arguments(
+            client_id="client_id_databricks_secret",
+            client_secret="client_secret_databricks_secret",
+        )
+        def get_client(
+            client_id: str | None = None,
+            client_secret: str = None,
+            client_id_databricks_secret: str | None = None,
+            client_secret_databricks_secret: str | None = None,
+        ) -> Client:
+            return Client(
+                oauth2_client_id=client_id,
+                oauth2_client_secret=client_secret,
+            )
+
+
+        client: Client = get_client(
+            client_id_databricks_secret=(
+                "client",
+                "client-id",
+            ),
+            client_secret_databricks_secret=(
+                "client",
+                "client-secret",
+            ),
+        )
+        ```
+    """
+    config: Config | None = _get_args_config(*args)[1]
+    get_scope_key_secret: Callable[[str | tuple[str, str]], str] = partial(
+        _get_scope_key_secret,
+        config=config,
+    )
+    return apply_callback_arguments(
+        get_scope_key_secret,
+        **kwargs,
+    )
+
+
 def _install_sh_databricks_cli() -> None:
     """
     Install the Databricks CLI using the install script.
@@ -403,80 +477,6 @@ def _get_args_config(*args: Any) -> tuple[tuple[Any, ...], Config | None]:
         if isinstance(value, Config):
             return (*args[:index], *args[index + 1 :]), value
     return args, None
-
-
-def apply_databricks_secrets_arguments(
-    *args: Config,
-    **kwargs: str,
-) -> Callable:
-    """
-    This decorator maps parameter names to Databricks secrets.
-    Each key in `databricks_secret_arguments` represents the name of a
-    parameter in the decorated function which accepts an explicit input, and
-    the corresponding mapped value is a parameter name accepting a tuple with
-    the secret scope and key with which to lookup a secret to pass to the
-    mapped parameter in lieu of an explicitly provided argument.
-
-    Parameters:
-        *args: A `databricks.sdk.Config` instance to configure
-            a workspace client when retrieving secrets remotely
-            (if more than one  is provided, only the first is used).
-        **kwargs: A mapping of static parameter names to the parameter names
-            of arguments accepting Databricks secret scope + key tuples
-            from which to retrieve a value when the key argument is not
-            explicitly provided.
-
-    Example:
-        ```python
-        from functools import (
-            cache,
-        )
-        from decorative_secrets.databricks import (
-            apply_databricks_secret_arguments,
-        )
-        from my_client_sdk import (
-            Client,
-        )
-
-
-        @cache
-        @apply_databricks_secret_arguments(
-            client_id="client_id_databricks_secret",
-            client_secret="client_secret_databricks_secret",
-        )
-        def get_client(
-            client_id: str | None = None,
-            client_secret: str = None,
-            client_id_databricks_secret: str | None = None,
-            client_secret_databricks_secret: str | None = None,
-        ) -> Client:
-            return Client(
-                oauth2_client_id=client_id,
-                oauth2_client_secret=client_secret,
-            )
-
-
-        client: Client = get_client(
-            client_id_databricks_secret=(
-                "client",
-                "client-id",
-            ),
-            client_secret_databricks_secret=(
-                "client",
-                "client-secret",
-            ),
-        )
-        ```
-    """
-    config: Config | None = _get_args_config(*args)[1]
-    get_scope_key_secret: Callable[[str | tuple[str, str]], str] = partial(
-        _get_scope_key_secret,
-        config=config,
-    )
-    return apply_callback_arguments(
-        get_scope_key_secret,
-        **kwargs,
-    )
 
 
 def _print_help() -> None:

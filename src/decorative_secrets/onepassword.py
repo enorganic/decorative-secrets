@@ -46,6 +46,102 @@ _INTEGRATION_NAME: str = "decorative-secrets"
 _INTEGRATION_VERSION: str = distribution("decorative-secrets").version
 
 
+def apply_onepassword_arguments(
+    *args: ApplyOnepasswordArgumentsOptions,
+    **kwargs: str,
+) -> Callable:
+    """
+    This decorator maps parameter names to 1Password resources.
+    Each key represents the name of a parameter in the decorated function
+    which accepts an explicit input, and the corresponding mapped value is a
+    parameter name accepting a resource path with which to lookup a secret
+    to pass to the mapped parameter in lieu of an explicitly provided
+    argument.
+
+    Parameters:
+        *args: An optional [ApplyOnepasswordArgumentsOptions
+            ](./#decorative_secrets.onepassword.ApplyOnepasswordArgumentsOptions)
+            instance governing the behavior of this decorator. If not provided,
+            a default instance of [ApplyOnepasswordArgumentsOptions()
+            ](./#decorative_secrets.onepassword.ApplyOnepasswordArgumentsOptions)
+            will be used. If multiple instances are provided, only the first
+            will be used.
+        **kwargs:
+            A mapping of static parameter names to the parameter names
+            of arguments accepting 1Password resource paths from which to
+            retrieve the value when the key argument is not explicitly
+            provided.
+
+    Example:
+        ```python
+        from functools import (
+            cache,
+        )
+        from decorative_secrets.onepassword import (
+            apply_onepassword_arguments,
+        )
+        from my_client_sdk import (
+            Client,
+        )
+
+
+        @cache
+        @apply_onepassword_arguments(
+            client_id="client_id_onepassword",
+            client_secret="client_secret_onepassword",
+        )
+        def get_client(
+            client_id: str | None = None,
+            client_secret: str = None,
+            client_id_onepassword: str | None = None,
+            client_secret_onepassword: str | None = None,
+        ) -> Client:
+            return Client(
+                oauth2_client_id=client_id,
+                oauth2_client_secret=client_secret,
+            )
+
+
+        client: Client = get_client(
+            client_id_onepassword=(
+                "op://Vault Name/Client ID Item Name/username",
+            ),
+            client_secret_onepassword=(
+                "op://Vault Name/Client Secret Item Name/credential",
+            ),
+        )
+        ```
+    """
+    options: ApplyOnepasswordArgumentsOptions
+    args, options = _get_args_options(*args)
+    read_onepassword_secret_: Callable[..., str] = read_onepassword_secret
+    async_read_onepassword_secret_: Callable[
+        [str, str | None, str | None, str | None], Coroutine[Any, Any, str]
+    ] = async_read_onepassword_secret
+    if (
+        (options.account is not None)
+        or (options.token is not None)
+        or (options.host is not None)
+    ):
+        read_onepassword_secret_ = partial(
+            read_onepassword_secret_,
+            **({"account": options.account} if options.account else {}),
+            **({"token": options.token} if options.token else {}),
+            **({"host": options.host} if options.host else {}),
+        )
+        async_read_onepassword_secret_ = partial(
+            async_read_onepassword_secret_,
+            **({"account": options.account} if options.account else {}),
+            **({"token": options.token} if options.token else {}),
+            **({"host": options.host} if options.host else {}),
+        )
+    return apply_callback_arguments(
+        read_onepassword_secret_,
+        async_read_onepassword_secret_,
+        **kwargs,
+    )
+
+
 def _install_op() -> None:
     """
     Install the 1Password CLI.
@@ -348,102 +444,6 @@ def _get_args_options(
         if isinstance(value, ApplyOnepasswordArgumentsOptions):
             return (*args[:index], *args[index + 1 :]), value
     return args, ApplyOnepasswordArgumentsOptions()
-
-
-def apply_onepassword_arguments(
-    *args: ApplyOnepasswordArgumentsOptions,
-    **kwargs: str,
-) -> Callable:
-    """
-    This decorator maps parameter names to 1Password resources.
-    Each key represents the name of a parameter in the decorated function
-    which accepts an explicit input, and the corresponding mapped value is a
-    parameter name accepting a resource path with which to lookup a secret
-    to pass to the mapped parameter in lieu of an explicitly provided
-    argument.
-
-    Parameters:
-        *args: An optional [ApplyOnepasswordArgumentsOptions
-            ](./#decorative_secrets.onepassword.ApplyOnepasswordArgumentsOptions)
-            instance governing the behavior of this decorator. If not provided,
-            a default instance of [ApplyOnepasswordArgumentsOptions()
-            ](./#decorative_secrets.onepassword.ApplyOnepasswordArgumentsOptions)
-            will be used. If multiple instances are provided, only the first
-            will be used.
-        **kwargs:
-            A mapping of static parameter names to the parameter names
-            of arguments accepting 1Password resource paths from which to
-            retrieve the value when the key argument is not explicitly
-            provided.
-
-    Example:
-        ```python
-        from functools import (
-            cache,
-        )
-        from decorative_secrets.onepassword import (
-            apply_onepassword_arguments,
-        )
-        from my_client_sdk import (
-            Client,
-        )
-
-
-        @cache
-        @apply_onepassword_arguments(
-            client_id="client_id_onepassword",
-            client_secret="client_secret_onepassword",
-        )
-        def get_client(
-            client_id: str | None = None,
-            client_secret: str = None,
-            client_id_onepassword: str | None = None,
-            client_secret_onepassword: str | None = None,
-        ) -> Client:
-            return Client(
-                oauth2_client_id=client_id,
-                oauth2_client_secret=client_secret,
-            )
-
-
-        client: Client = get_client(
-            client_id_onepassword=(
-                "op://Vault Name/Client ID Item Name/username",
-            ),
-            client_secret_onepassword=(
-                "op://Vault Name/Client Secret Item Name/credential",
-            ),
-        )
-        ```
-    """
-    options: ApplyOnepasswordArgumentsOptions
-    args, options = _get_args_options(*args)
-    read_onepassword_secret_: Callable[..., str] = read_onepassword_secret
-    async_read_onepassword_secret_: Callable[
-        [str, str | None, str | None, str | None], Coroutine[Any, Any, str]
-    ] = async_read_onepassword_secret
-    if (
-        (options.account is not None)
-        or (options.token is not None)
-        or (options.host is not None)
-    ):
-        read_onepassword_secret_ = partial(
-            read_onepassword_secret_,
-            **({"account": options.account} if options.account else {}),
-            **({"token": options.token} if options.token else {}),
-            **({"host": options.host} if options.host else {}),
-        )
-        async_read_onepassword_secret_ = partial(
-            async_read_onepassword_secret_,
-            **({"account": options.account} if options.account else {}),
-            **({"token": options.token} if options.token else {}),
-            **({"host": options.host} if options.host else {}),
-        )
-    return apply_callback_arguments(
-        read_onepassword_secret_,
-        async_read_onepassword_secret_,
-        **kwargs,
-    )
 
 
 def _print_help() -> None:
