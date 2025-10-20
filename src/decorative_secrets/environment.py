@@ -5,7 +5,7 @@ import os
 from functools import partial
 from typing import TYPE_CHECKING
 
-from decorative_secrets._utilities import apply_callback_arguments
+from decorative_secrets.callback import apply_callback_arguments
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping

@@ -5,10 +5,10 @@ import sys
 from contextlib import suppress
 
 from decorative_secrets._utilities import (
-    apply_callback_arguments,
     install_brew,
     which_brew,
 )
+from decorative_secrets.callback import apply_callback_arguments
 from decorative_secrets.errors import (
     HomebrewNotInstalledError,
 )

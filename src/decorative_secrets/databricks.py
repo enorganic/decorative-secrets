@@ -13,10 +13,10 @@ from urllib.request import urlopen
 from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
-    apply_callback_arguments,
     which_brew,
     which_winget,
 )
+from decorative_secrets.callback import apply_callback_arguments
 from decorative_secrets.errors import (
     DatabricksCLINotInstalledError,
     HomebrewNotInstalledError,
