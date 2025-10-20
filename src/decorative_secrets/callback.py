@@ -1,6 +1,6 @@
 import asyncio
 from collections import deque
-from collections.abc import Callable, Coroutine, Iterable, Mapping, Sequence
+from collections.abc import Callable, Coroutine, Mapping, Sequence
 from functools import wraps
 from inspect import Parameter, Signature, signature
 from typing import Any
@@ -17,12 +17,46 @@ from decorative_secrets._utilities import (
 from decorative_secrets.errors import ArgumentsResolutionError
 
 
+def _get_sync_async_callbacks(
+    *callbacks: Callable[..., Any],
+) -> tuple[Callable[..., Any], Callable[..., Any]]:
+    """
+    This function validates and consolidates a set of callback functions.
+    """
+    message: str
+    if not callbacks:
+        message = "At least one callback function must be provided."
+        raise ValueError(message)
+    sync_callback: Callable[..., Any] | None = None
+    async_callback: Callable[..., Any] | None = None
+    for callback in callbacks:
+        if iscoroutinefunction(callback):
+            async_callback = callback
+        elif callable(callback):
+            sync_callback = callback
+    if sync_callback is None:
+        if async_callback is None:
+            message = (
+                "Either a `callback` or an `async_callback` argument must be "
+                "provided."
+            )
+            raise ValueError(message)
+
+        def sync_callback(argument: Any) -> Any:
+            return asyncio_run(async_callback(argument))
+
+    if async_callback is None:
+
+        async def async_callback(argument: Any) -> Any:
+            await asyncio.sleep(0)
+            return sync_callback(argument)
+
+    return sync_callback, async_callback
+
+
 def apply_callback_arguments(  # noqa: C901
-    callback: Callable[..., Any] | None = None,
-    async_callback: Callable[..., Any] | None = None,
-    callback_parameter_names: Mapping[str, str]
-    | Iterable[tuple[str, str]] = (),
-    **callback_parameter_names_kwargs: str,
+    *callbacks: Callable[..., Any],
+    **callback_parameter_names: str,
 ) -> Callable[..., Callable[..., Any]]:
     """
     This decorator maps parameter names to callback arguments.
@@ -31,19 +65,13 @@ def apply_callback_arguments(  # noqa: C901
     an argument to pass to the provided callback function(s).
 
     Parameters:
-        callback: A synchronous function which accepts one argument, and
-            returns a value to be passed to a parameter of the decorated
-            function.
-        async_callback: An asynchronous function which accepts one argument,
-            and returns a value to be passed to a parameter of the decorated
-            function.
-        callback_parameter_names:
+        *callbacks: One or more callback functions. If both synchronous and
+            asynchronous functions are provided, they will be used
+            appropriately based on the decorated function's type, otherwise
+            synchronous functions will be wrapped for asynchronous use
+            and vice versa.
+        **callback_parameter_names:
             A mapping of static parameter names to callback parameter names.
-        callback_parameter_names_kwargs: Synonymous with
-            `callback_parameter_names`. When both are provided,
-            `callback_parameter_names_kwargs` is updated from
-            `callback_parameter_names` in order to merge the
-            two.
 
     Returns:
         A decorator function which retrieves argument values by
@@ -72,34 +100,9 @@ def apply_callback_arguments(  # noqa: C901
         ... )
         36
     """
-    message: str
-    if (callback is not None) and iscoroutinefunction(callback):
-        raise TypeError(callback)
-    if (async_callback is not None) and not iscoroutinefunction(
-        async_callback
-    ):
-        raise TypeError(async_callback)
-    if callback is None:
-        if async_callback is None:
-            message = (
-                "Either a `callback` or an `async_callback` argument must be "
-                "provided."
-            )
-            raise ValueError(message)
-
-        def callback(argument: Any) -> Any:
-            return asyncio_run(async_callback(argument))
-
-    if async_callback is None:
-
-        async def async_callback(argument: Any) -> Any:
-            await asyncio.sleep(0)
-            return callback(argument)
-
-    if not isinstance(callback_parameter_names, dict):
-        callback_parameter_names = dict(callback_parameter_names)
-    if callback_parameter_names_kwargs:
-        callback_parameter_names.update(**callback_parameter_names_kwargs)
+    callback: Callable[..., Any]
+    async_callback: Callable[..., Any]
+    callback, async_callback = _get_sync_async_callbacks(*callbacks)
 
     def decorating_function(  # noqa: C901
         function: Callable[..., Any],

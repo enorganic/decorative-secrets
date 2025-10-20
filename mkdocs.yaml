@@ -48,7 +48,9 @@ plugins:
         python:
           options:
             docstring_section_style: list
-            members_order: source
+            members_order:
+              - __all__
+              - source
             show_root_heading: true
             show_source: true
             show_signature_annotations: true
@@ -56,7 +58,6 @@ plugins:
             separate_signature: true
             inherited_members: true
             heading_level: 1
-            separate_signature: true
             annotations_path: full
 markdown_extensions:
   - pymdownx.superfences:

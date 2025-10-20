@@ -37,7 +37,7 @@ def test_apply_callback_arguments() -> None:
     def callback(x: int) -> int:
         return x * 2
 
-    @apply_callback_arguments(callback, None, {"x": "x_lookup_arg"})
+    @apply_callback_arguments(callback, x="x_lookup_arg")
     def return_value(
         x: int,
         x_lookup_arg: str | None = None,  # noqa: ARG001
@@ -46,7 +46,7 @@ def test_apply_callback_arguments() -> None:
 
     assert return_value(x_lookup_arg=3) == 36
 
-    @apply_callback_arguments(callback, None, {"x": "x_lookup_arg"})
+    @apply_callback_arguments(callback, x="x_lookup_arg")
     async def async_return_value(
         x: int,
         x_lookup_arg: str | None = None,  # noqa: ARG001
@@ -60,7 +60,7 @@ def test_apply_callback_arguments() -> None:
         await asyncio.sleep(0)
         return x * 2
 
-    @apply_callback_arguments(None, async_callback, {"x": "x_lookup_arg"})
+    @apply_callback_arguments(async_callback, x="x_lookup_arg")
     def return_value_with_async_callback(
         x: int,
         x_lookup_arg: str | None = None,  # noqa: ARG001
@@ -69,7 +69,7 @@ def test_apply_callback_arguments() -> None:
 
     assert return_value_with_async_callback(x_lookup_arg=3) == 36
 
-    @apply_callback_arguments(None, async_callback, {"x": "x_lookup_arg"})
+    @apply_callback_arguments(async_callback, x="x_lookup_arg")
     async def async_return_value_with_async_callback(
         x: int,
         x_lookup_arg: str | None = None,  # noqa: ARG001
