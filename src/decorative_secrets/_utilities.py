@@ -162,7 +162,7 @@ def merge_function_signature_args_kwargs(
 
 
 @as_dict
-def map_signature_parameter_names_defaults(
+def get_signature_parameter_names_defaults(
     function_signature: Signature,
 ) -> Iterable[tuple[str, Any]]:
     """

@@ -1,4 +1,3 @@
-from collections import deque
 from collections.abc import Callable
 from functools import wraps
 from inspect import Signature, iscoroutinefunction, signature
@@ -6,14 +5,10 @@ from typing import Any
 
 from decorative_secrets._utilities import (
     get_function_signature_applicable_args_kwargs,
-    map_signature_parameter_names_defaults,
+    get_signature_parameter_names_defaults,
     merge_function_signature_args_kwargs,
     unwrap_function,
 )
-
-
-def _exclude_none_value_items(item: tuple[str, Any]) -> bool:
-    return bool(item[1] is not None)
 
 
 def apply_conditional_defaults(
@@ -98,15 +93,21 @@ def apply_conditional_defaults(
             # parameters
             key: str
             value: Any
-            deque(
-                (
-                    kwargs_or_defaults.setdefault(key, value)
-                    for key, value in map_signature_parameter_names_defaults(
-                        function_signature
-                    ).items()
-                ),
-                maxlen=0,
-            )
+            for key, value in get_signature_parameter_names_defaults(
+                function_signature
+            ).items():
+                if (
+                    (value is None)
+                    and (key in kwargs)
+                    and (kwargs[key] is None)
+                ):
+                    # If the keyword argument value is explicitly `None`,
+                    # and the parameter default is also `None`, we will infer
+                    # a `None` default has been passed-through and drop it
+                    # from the `kwargs` dictionary to allow the argument
+                    # to be superseded by any applicable conditional defaults.
+                    del kwargs[key]
+                kwargs_or_defaults.setdefault(key, value)
             condition_args, condition_kwargs = (
                 get_function_signature_applicable_args_kwargs(
                     condition_signature, args, kwargs_or_defaults
