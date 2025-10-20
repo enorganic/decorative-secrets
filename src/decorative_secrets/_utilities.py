@@ -126,6 +126,20 @@ def as_tuple(
     return update_wrapper(wrapper, user_function)
 
 
+def as_dict(
+    user_function: Callable[..., Iterable[tuple[Any, Any]]],
+) -> Callable[..., dict[Any, Any]]:
+    """
+    This is a decorator which will return an iterable of key/value pairs
+    as a dictionary.
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> dict[Any, Any]:
+        return dict(user_function(*args, **kwargs) or ())
+
+    return update_wrapper(wrapper, user_function)
+
+
 @as_tuple
 def merge_function_signature_args_kwargs(
     function_signature: Signature, args: Iterable[Any], kwargs: dict[str, Any]
@@ -147,28 +161,92 @@ def merge_function_signature_args_kwargs(
                 yield value
 
 
-def remove_function_signature_inapplicable_kwargs(
-    function_signature: Signature, kwargs: dict[str, Any]
-) -> None:
-    def get_parameter_name(parameter_: Parameter) -> str:
-        return parameter_.name
+@as_dict
+def map_signature_parameter_names_defaults(
+    function_signature: Signature,
+) -> Iterable[tuple[str, Any]]:
+    """
+    This function returns a dictionary mapping parameter names to their default
+    values for all keyword parameters in the function signature.
+    """
+    parameter: Parameter
+    for parameter in function_signature.parameters.values():
+        if (parameter.default is not Signature.empty) and parameter.name:
+            yield parameter.name, parameter.default
 
-    key: str
-    for key in set(kwargs.keys()) - set(
-        map(
-            get_parameter_name,
-            function_signature.parameters.values(),
-        )
-    ):
-        del kwargs[key]
+
+@as_dict
+def map_signature_parameter_names_args(
+    function_signature: Signature, args: Iterable[Any]
+) -> Iterable[tuple[str, Any]]:
+    """
+    This function returns a mapping of parameter names to values
+    for non-variable positional arguments.
+    """
+    value: Any
+    parameter: Parameter
+    if args:
+        for parameter, value in zip(
+            function_signature.parameters.values(), args, strict=False
+        ):
+            if parameter.kind not in (
+                Parameter.VAR_POSITIONAL,
+                Parameter.VAR_KEYWORD,
+            ):
+                yield parameter.name, value
+
+
+def get_function_signature_applicable_args_kwargs(
+    function_signature: Signature | Callable,
+    args: Sequence[Any],
+    kwargs: dict[str, Any],
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """
+    Given a function or function signature, and positional and keyword
+    arguments, this function returns only those arguments and keyword
+    arguments which are applicable to the function.
+
+    Parameters:
+        function_signature: A function or function signature whose
+            parameters will be used to filter the provided arguments.
+        args: A sequence of positional arguments.
+        kwargs: A dictionary of keyword arguments.
+    """
+    applicable_kwargs: dict[str, Any] = {}
+    max_positional_argument_count: int | None = 0
+    parameter: Parameter
+    if not isinstance(function_signature, Signature):
+        function_signature = signature(function_signature)
+    for parameter in function_signature.parameters.values():
+        if parameter.kind == Parameter.VAR_KEYWORD:
+            # All keywords are accepted
+            applicable_kwargs = kwargs
+            break
+        if parameter.kind in (
+            Parameter.KEYWORD_ONLY,
+            Parameter.POSITIONAL_OR_KEYWORD,
+        ) and (parameter.name in kwargs):
+            applicable_kwargs[parameter.name] = kwargs[parameter.name]
+        elif max_positional_argument_count is not None:
+            if parameter.kind in (
+                Parameter.POSITIONAL_ONLY,
+                Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                max_positional_argument_count += 1
+            elif parameter.kind == Parameter.VAR_POSITIONAL:
+                # Unlimited positional arguments
+                max_positional_argument_count = None
+    return (tuple(args[:max_positional_argument_count]), applicable_kwargs)
 
 
 def get_function_signature_parameter_value_or_default(
-    function_signature: Signature,
+    function_signature: Signature | Callable,
     parameter_name: str,
     kwargs: dict[str, Any],
     default: Any,
 ) -> Any:
+    if not isinstance(function_signature, Signature):
+        function_signature = signature(function_signature)
     value: Any = default
     if parameter_name and (parameter_name in kwargs):
         value = kwargs[parameter_name] or default
@@ -404,11 +482,6 @@ def apply_callback_arguments(  # noqa: C901
                         )
             # Remove unused callback arguments
             deque(map(kwargs.pop, unused_callback_parameter_names), maxlen=0)
-            # Remove arguments which do not correspond to
-            # any of the function's parameter names
-            remove_function_signature_inapplicable_kwargs(
-                function_signature, kwargs
-            )
             return (args, kwargs)
 
         if iscoroutinefunction(function):
