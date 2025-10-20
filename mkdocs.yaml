@@ -9,6 +9,7 @@ nav:
     - databricks: 'api/databricks.md'
     - onepassword: 'api/onepassword.md'
     - environment: 'api/environment.md'
+    - defaults: 'api/defaults.md'
 - Contributing: 'contributing.md'
 theme:
   name: material
