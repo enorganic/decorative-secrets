@@ -10,7 +10,7 @@ Usage:
 
 Secret Managers:
   databricks
-  onepasswor
+  onepassword
 ```
 
 ## decorative-secrets databricks
