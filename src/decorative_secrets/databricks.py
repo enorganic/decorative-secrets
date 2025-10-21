@@ -7,7 +7,7 @@ from contextlib import suppress
 from functools import cache, partial
 from shutil import which
 from subprocess import CalledProcessError
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
@@ -27,7 +27,36 @@ from decorative_secrets.subprocess import check_call, check_output
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
+
+
+class DatabricksWorkspaceConfigDict(TypedDict, total=False):
+    host: str | None
+    account_id: str | None
+    username: str | None
+    password: str | None
+    client_id: str | None
+    client_secret: str | None
+    token: str | None
+    profile: str | None
+    config_file: str | None
+    azure_workspace_resource_id: str | None
+    azure_client_secret: str | None
+    azure_client_id: str | None
+    azure_tenant_id: str | None
+    azure_environment: str | None
+    auth_type: str | None
+    cluster_id: str | None
+    google_credentials: str | None
+    google_service_account: str | None
+    debug_truncate_bytes: int | None
+    debug_headers: bool | None
+    product: str
+    product_version: str
+    credentials_strategy: CredentialsStrategy | None
+    credentials_provider: CredentialsStrategy | None
+    token_audience: str | None
 
 
 def apply_databricks_secrets_arguments(
@@ -193,7 +222,7 @@ def databricks_auth_login(host: str | None = None) -> None:
 
 @cache
 def _get_env_databricks_workspace_client(
-    config: Config | None = None,
+    config: Config | DatabricksWorkspaceConfigDict | None = None,
     **env: str,  # noqa: ARG001
 ) -> WorkspaceClient:
     """
@@ -201,9 +230,19 @@ def _get_env_databricks_workspace_client(
     environment variables, to ensure changes to the environment are reflected.
     """
     if not (
-        config
-        and (config.client_id or os.getenv("DATABRICKS_CLIENT_ID"))
-        and (config.client_secret or os.getenv("DATABRICKS_CLIENT_SECRET"))
+        (
+            isinstance(config, Config)
+            and (config.client_id or os.getenv("DATABRICKS_CLIENT_ID"))
+            and (config.client_secret or os.getenv("DATABRICKS_CLIENT_SECRET"))
+        )
+        or (
+            isinstance(config, dict)
+            and (config.get("client_id") or os.getenv("DATABRICKS_CLIENT_ID"))
+            and (
+                config.get("client_secret")
+                or os.getenv("DATABRICKS_CLIENT_SECRET")
+            )
+        )
     ):
         with suppress(
             CalledProcessError,
@@ -211,13 +250,19 @@ def _get_env_databricks_workspace_client(
             DatabricksCLINotInstalledError,
         ):
             databricks_auth_login()
-    return WorkspaceClient(
-        config=config,
+    return (
+        WorkspaceClient(
+            config=config,
+        )
+        if isinstance(config, Config)
+        else WorkspaceClient(**config)
+        if isinstance(config, dict)
+        else WorkspaceClient()
     )
 
 
 def get_databricks_workspace_client(
-    config: Config | None = None,
+    config: Config | DatabricksWorkspaceConfigDict | None = None,
 ) -> WorkspaceClient:
     """
     Get a Databricks WorkspaceClient configured from environment variables.
@@ -229,7 +274,7 @@ def get_databricks_workspace_client(
 
 
 def get_dbutils(
-    config: Config | None = None,
+    config: Config | DatabricksWorkspaceConfigDict | None = None,
 ) -> RemoteDbUtils:  # pragma: no cover - environment dependent
     """
     Get [dbutils](https://docs.databricks.com/dev-tools/databricks-utils.html)
@@ -275,7 +320,7 @@ def get_dbutils(
 def _get_secret(
     scope: str,
     key: str,
-    config: Config | None = None,
+    config: Config | DatabricksWorkspaceConfigDict | None = None,
     **env: str,  # noqa: ARG001
 ) -> str:
     """
