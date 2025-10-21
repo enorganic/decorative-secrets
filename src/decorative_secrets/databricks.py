@@ -216,7 +216,7 @@ def _get_env_databricks_workspace_client(
     )
 
 
-def _get_databricks_workspace_client(
+def get_databricks_workspace_client(
     config: Config | None = None,
 ) -> WorkspaceClient:
     """
@@ -264,7 +264,7 @@ def get_dbutils(
     if dbutils is not None:
         return dbutils
     databricks_workspace_client: WorkspaceClient = (
-        _get_databricks_workspace_client(
+        get_databricks_workspace_client(
             config=config,
         )
     )
