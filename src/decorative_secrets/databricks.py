@@ -27,7 +27,6 @@ from decorative_secrets.subprocess import check_call, check_output
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
 
 
@@ -194,31 +193,6 @@ def databricks_auth_login(host: str | None = None) -> None:
 
 @cache
 def _get_env_databricks_workspace_client(
-    host: str | None = None,
-    account_id: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    client_id: str | None = None,
-    client_secret: str | None = None,
-    token: str | None = None,
-    profile: str | None = None,
-    config_file: str | None = None,
-    azure_workspace_resource_id: str | None = None,
-    azure_client_secret: str | None = None,
-    azure_client_id: str | None = None,
-    azure_tenant_id: str | None = None,
-    azure_environment: str | None = None,
-    auth_type: str | None = None,
-    cluster_id: str | None = None,
-    google_credentials: str | None = None,
-    google_service_account: str | None = None,
-    debug_truncate_bytes: int | None = None,
-    debug_headers: bool | None = None,
-    product: str = "unknown",
-    product_version: str = "0.0.0",
-    credentials_strategy: CredentialsStrategy | None = None,
-    credentials_provider: CredentialsStrategy | None = None,
-    token_audience: str | None = None,
     config: Config | None = None,
     **env: str,  # noqa: ARG001
 ) -> WorkspaceClient:
@@ -227,8 +201,9 @@ def _get_env_databricks_workspace_client(
     environment variables, to ensure changes to the environment are reflected.
     """
     if not (
-        (client_id or os.getenv("DATABRICKS_CLIENT_ID"))
-        and (client_secret or os.getenv("DATABRICKS_CLIENT_SECRET"))
+        config
+        and (config.client_id or os.getenv("DATABRICKS_CLIENT_ID"))
+        and (config.client_secret or os.getenv("DATABRICKS_CLIENT_SECRET"))
     ):
         with suppress(
             CalledProcessError,
@@ -237,123 +212,23 @@ def _get_env_databricks_workspace_client(
         ):
             databricks_auth_login()
     return WorkspaceClient(
-        host=host,
-        account_id=account_id,
-        username=username,
-        password=password,
-        client_id=client_id,
-        client_secret=client_secret,
-        token=token,
-        profile=profile,
-        config_file=config_file,
-        azure_workspace_resource_id=azure_workspace_resource_id,
-        azure_client_secret=azure_client_secret,
-        azure_client_id=azure_client_id,
-        azure_tenant_id=azure_tenant_id,
-        azure_environment=azure_environment,
-        auth_type=auth_type,
-        cluster_id=cluster_id,
-        google_credentials=google_credentials,
-        google_service_account=google_service_account,
-        debug_truncate_bytes=debug_truncate_bytes,
-        debug_headers=debug_headers,
-        product=product,
-        product_version=product_version,
-        credentials_strategy=credentials_strategy,
-        credentials_provider=credentials_provider,
-        token_audience=token_audience,
         config=config,
     )
 
 
 def _get_databricks_workspace_client(
-    host: str | None = None,
-    account_id: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    client_id: str | None = None,
-    client_secret: str | None = None,
-    token: str | None = None,
-    profile: str | None = None,
-    config_file: str | None = None,
-    azure_workspace_resource_id: str | None = None,
-    azure_client_secret: str | None = None,
-    azure_client_id: str | None = None,
-    azure_tenant_id: str | None = None,
-    azure_environment: str | None = None,
-    auth_type: str | None = None,
-    cluster_id: str | None = None,
-    google_credentials: str | None = None,
-    google_service_account: str | None = None,
-    debug_truncate_bytes: int | None = None,
-    debug_headers: bool | None = None,
-    product: str = "unknown",
-    product_version: str = "0.0.0",
-    credentials_strategy: CredentialsStrategy | None = None,
-    credentials_provider: CredentialsStrategy | None = None,
-    token_audience: str | None = None,
     config: Config | None = None,
 ) -> WorkspaceClient:
     """
     Get a Databricks WorkspaceClient configured from environment variables.
     """
     return _get_env_databricks_workspace_client(
-        host=host,
-        account_id=account_id,
-        username=username,
-        password=password,
-        client_id=client_id,
-        client_secret=client_secret,
-        token=token,
-        profile=profile,
-        config_file=config_file,
-        azure_workspace_resource_id=azure_workspace_resource_id,
-        azure_client_secret=azure_client_secret,
-        azure_client_id=azure_client_id,
-        azure_tenant_id=azure_tenant_id,
-        azure_environment=azure_environment,
-        auth_type=auth_type,
-        cluster_id=cluster_id,
-        google_credentials=google_credentials,
-        google_service_account=google_service_account,
-        debug_truncate_bytes=debug_truncate_bytes,
-        debug_headers=debug_headers,
-        product=product,
-        product_version=product_version,
-        credentials_strategy=credentials_strategy,
-        credentials_provider=credentials_provider,
-        token_audience=token_audience,
         config=config,
         **os.environ,
     )
 
 
 def get_dbutils(
-    host: str | None = None,
-    account_id: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    client_id: str | None = None,
-    client_secret: str | None = None,
-    token: str | None = None,
-    profile: str | None = None,
-    config_file: str | None = None,
-    azure_workspace_resource_id: str | None = None,
-    azure_client_secret: str | None = None,
-    azure_client_id: str | None = None,
-    azure_tenant_id: str | None = None,
-    azure_environment: str | None = None,
-    auth_type: str | None = None,
-    cluster_id: str | None = None,
-    google_credentials: str | None = None,
-    google_service_account: str | None = None,
-    debug_truncate_bytes: int | None = None,
-    debug_headers: bool | None = None,
-    product: str = "unknown",
-    product_version: str = "0.0.0",
-    credentials_strategy: CredentialsStrategy | None = None,
-    credentials_provider: CredentialsStrategy | None = None,
-    token_audience: str | None = None,
     config: Config | None = None,
 ) -> RemoteDbUtils:  # pragma: no cover - environment dependent
     """
@@ -390,31 +265,6 @@ def get_dbutils(
         return dbutils
     databricks_workspace_client: WorkspaceClient = (
         _get_databricks_workspace_client(
-            host=host,
-            account_id=account_id,
-            username=username,
-            password=password,
-            client_id=client_id,
-            client_secret=client_secret,
-            token=token,
-            profile=profile,
-            config_file=config_file,
-            azure_workspace_resource_id=azure_workspace_resource_id,
-            azure_client_secret=azure_client_secret,
-            azure_client_id=azure_client_id,
-            azure_tenant_id=azure_tenant_id,
-            azure_environment=azure_environment,
-            auth_type=auth_type,
-            cluster_id=cluster_id,
-            google_credentials=google_credentials,
-            google_service_account=google_service_account,
-            debug_truncate_bytes=debug_truncate_bytes,
-            debug_headers=debug_headers,
-            product=product,
-            product_version=product_version,
-            credentials_strategy=credentials_strategy,
-            credentials_provider=credentials_provider,
-            token_audience=token_audience,
             config=config,
         )
     )
