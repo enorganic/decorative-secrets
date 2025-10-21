@@ -32,6 +32,11 @@ if TYPE_CHECKING:
 
 
 class DatabricksWorkspaceConfigDict(TypedDict, total=False):
+    """
+    A typed dictionary representing the configuration options for a Databricks
+    Workspace Client.
+    """
+
     host: str | None
     account_id: str | None
     username: str | None
