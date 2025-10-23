@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from functools import cache, partial
@@ -12,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.config import Config
 
 from decorative_secrets._utilities import (
     which_brew,
@@ -28,6 +28,7 @@ from decorative_secrets.subprocess import check_call, check_output
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
 
@@ -214,23 +215,47 @@ def which_databricks() -> str:
 
 
 @cache
-def _databricks_auth_login(host: str | None = None) -> None:
-    if host is None:
-        host = os.getenv("DATABRICKS_HOST")
+def _databricks_auth_login(
+    host: str | None = None,
+    profile: str | None = None,
+    target: str | None = None,
+) -> None:
     databricks = which_databricks()
-    if host:
-        check_call((databricks, "auth", "login", "--host", host), input=b"\n")
+    if host or profile or target:
+        check_call(
+            (
+                databricks,
+                "auth",
+                "login",
+                *(("--host", host) if host else ()),
+                *(("--profile", profile) if profile else ()),
+                *(("--target", target) if target else ()),
+            ),
+            input=b"\n\n",
+        )
     else:
         # Automatically select the default/first profile if no host
         # is specified
         check_call((databricks, "auth", "login"), input=b"\n\n")
 
 
-def databricks_auth_login(host: str | None = None) -> None:
+def databricks_auth_login(
+    host: str | None = None,
+    profile: str | None = None,
+    target: str | None = None,
+) -> None:
     """
     Log in to Databricks using the CLI if not already logged in.
+
+    Parameters:
+        host: A Databricks workspace host URL.
+        profile: A Databricks Configuration Profile.
+        target: A Databricks CLI target.
     """
-    return _databricks_auth_login(host or os.getenv("DATABRICKS_HOST"))
+    if (host is None) and (profile is None) and (target is None):
+        host = os.getenv("DATABRICKS_HOST")
+        profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
+    return _databricks_auth_login(host=host, profile=profile, target=target)
 
 
 @cache
@@ -276,35 +301,49 @@ def _get_env_databricks_workspace_client(
             FileNotFoundError,
             DatabricksCLINotInstalledError,
         ):
-            databricks_auth_login()
-    return WorkspaceClient(
-        host=host,
-        account_id=account_id,
-        username=username,
-        password=password,
-        client_id=client_id,
-        client_secret=client_secret,
-        token=token,
-        profile=profile,
-        config_file=config_file,
-        azure_workspace_resource_id=azure_workspace_resource_id,
-        azure_client_secret=azure_client_secret,
-        azure_client_id=azure_client_id,
-        azure_tenant_id=azure_tenant_id,
-        azure_environment=azure_environment,
-        auth_type=auth_type,
-        cluster_id=cluster_id,
-        google_credentials=google_credentials,
-        google_service_account=google_service_account,
-        debug_truncate_bytes=debug_truncate_bytes,
-        debug_headers=debug_headers,
-        product=product,
-        product_version=product_version,
-        credentials_strategy=credentials_strategy,
-        credentials_provider=credentials_provider,
-        token_audience=token_audience,
-        config=config,
-    )
+            databricks_auth_login(host=host, profile=profile)
+    environ: Mapping[str, str] = os.environ.copy() if profile else os.environ
+    try:
+        if profile:
+            # If a profile was explicitly provided, ensure it is used,
+            # and environment variables are ignored
+            key: str
+            for key in os.environ:
+                if key.startswith("DATABRICKS_"):
+                    os.environ.pop(key, None)
+        client: WorkspaceClient = WorkspaceClient(
+            host=host,
+            account_id=account_id,
+            username=username,
+            password=password,
+            client_id=client_id,
+            client_secret=client_secret,
+            token=token,
+            profile=profile,
+            config_file=config_file,
+            azure_workspace_resource_id=azure_workspace_resource_id,
+            azure_client_secret=azure_client_secret,
+            azure_client_id=azure_client_id,
+            azure_tenant_id=azure_tenant_id,
+            azure_environment=azure_environment,
+            auth_type=auth_type,
+            cluster_id=cluster_id,
+            google_credentials=google_credentials,
+            google_service_account=google_service_account,
+            debug_truncate_bytes=debug_truncate_bytes,
+            debug_headers=debug_headers,
+            product=product,
+            product_version=product_version,
+            credentials_strategy=credentials_strategy,
+            credentials_provider=credentials_provider,
+            token_audience=token_audience,
+            config=config,
+        )
+    finally:
+        if profile:
+            # Restore the original environment if a profile was used
+            os.environ.update(environ)
+    return client
 
 
 def get_databricks_workspace_client(
@@ -785,26 +824,15 @@ def main() -> None:
             help="A Databricks Configuration Profile",
         )
         namespace: argparse.Namespace = parser.parse_args()
-        config: Config | None = None
-        if (
-            namespace.host
-            or namespace.client_id
-            or namespace.client_secret
-            or namespace.token
-            or namespace.profile
-        ):
-            config = Config(
+        print(  # noqa: T201
+            get_databricks_secret(
+                namespace.scope,
+                namespace.key,
                 host=namespace.host,
                 client_id=namespace.client_id,
                 client_secret=namespace.client_secret,
                 token=namespace.token,
                 profile=namespace.profile,
-            )
-        print(  # noqa: T201
-            get_databricks_secret(
-                namespace.scope,
-                namespace.key,
-                config=config,
             )
         )
 
