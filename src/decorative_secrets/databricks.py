@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from functools import cache, partial
@@ -26,7 +25,7 @@ from decorative_secrets.errors import (
 from decorative_secrets.subprocess import check_call, check_output
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
