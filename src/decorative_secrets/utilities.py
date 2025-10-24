@@ -25,7 +25,6 @@ def as_tuple(
         assert get_numbers() == (1, 2, 3)
         ```
     """
-
     if iscoroutinefunction(function):
 
         @wraps(function)

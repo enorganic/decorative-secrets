@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,7 +14,6 @@ from decorative_secrets.databricks import (
     apply_databricks_secrets_arguments,
     get_databricks_secret,
 )
-from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -112,7 +110,6 @@ def test_apply_databricks_secret_arguments(
     finally:
         os.environ.clear()
         os.environ.update(env)
-    check_output((sys.executable, "-m", "pytest", "-s", "-vv", __file__))
 
 
 if __name__ == "__main__":
