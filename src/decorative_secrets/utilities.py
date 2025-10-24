@@ -1,7 +1,7 @@
 from asyncio import iscoroutinefunction
 from collections.abc import Callable, Iterable
 from functools import wraps
-from typing import Any
+from typing import Any, overload
 
 
 def as_tuple(
@@ -39,6 +39,20 @@ def as_tuple(
             return tuple(function(*args, **kwargs) or ())
 
     return wrapper
+
+
+@overload
+def as_str(
+    function: None = None,
+    separator: str = "",
+) -> Callable[..., Callable[..., str]]: ...
+
+
+@overload
+def as_str(
+    function: Callable[..., Iterable[str]] = ...,
+    separator: str = "",
+) -> Callable[..., str]: ...
 
 
 def as_str(

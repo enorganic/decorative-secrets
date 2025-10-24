@@ -1,5 +1,6 @@
 import os
 
+import pytest
 from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
@@ -42,3 +43,7 @@ def test_apply_environment_arguments(onepassword_vault: str) -> None:
     finally:
         os.environ.clear()
         os.environ.update(env)
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", "-vv", __file__])

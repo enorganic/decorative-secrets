@@ -3,6 +3,7 @@ import os
 import sys
 from contextlib import suppress
 
+import pytest
 from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
@@ -286,3 +287,7 @@ def test_parse_resource() -> None:
         "My Item",
         "fieldname",
     )
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", "-vv", __file__])
