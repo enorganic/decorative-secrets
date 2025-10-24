@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.5.4"
+version = "0.6.0"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
