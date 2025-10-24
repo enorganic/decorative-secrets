@@ -1,4 +1,4 @@
-from subprocess import check_call
+import pytest
 
 from decorative_secrets.defaults import (
     ApplyConditionalDefaultsOptions,
@@ -133,4 +133,4 @@ def test_apply_conditional_defaults_filter_parameter_defaults() -> None:
 
 
 if __name__ == "__main__":
-    check_call(("pytest", "-s", "-vv", __file__))
+    pytest.main(["-s", "-vv", __file__])

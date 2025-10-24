@@ -1,7 +1,7 @@
 import os
-import sys
 from typing import TYPE_CHECKING
 
+import pytest
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
@@ -14,7 +14,6 @@ from decorative_secrets.databricks import (
     apply_databricks_secrets_arguments,
     get_databricks_secret,
 )
-from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -114,4 +113,4 @@ def test_apply_databricks_secret_arguments(
 
 
 if __name__ == "__main__":
-    check_output((sys.executable, "-m", "pytest", "-s", "-vv", __file__))
+    pytest.main(["-s", "-vv", __file__])

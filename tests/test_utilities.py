@@ -1,83 +1,64 @@
 from __future__ import annotations
 
-import asyncio
-import sys
-from contextlib import suppress
+from typing import TYPE_CHECKING
 
-from decorative_secrets._utilities import (
-    install_brew,
-    which_brew,
-)
-from decorative_secrets.callback import apply_callback_arguments
-from decorative_secrets.errors import (
-    HomebrewNotInstalledError,
-)
-from decorative_secrets.subprocess import check_output
+import pytest
+
+from decorative_secrets.utilities import as_dict, as_str, as_tuple
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
-def test_install_brew() -> None:
+def test_as_dict() -> None:
     """
-    Verify that the Homebrew install script can be downloaded and run on macOS.
-    """
-    if sys.platform == "darwin":
-        # Here we supprcess the HomebrewNotInstalledError because the
-        # correct behavior when running tests not in `sudo` mode is to fail
-        # with this error
-        with suppress(HomebrewNotInstalledError):
-            install_brew()
-            brew: str = which_brew()
-            assert check_output((brew, "--version"))
-
-
-def test_apply_callback_arguments() -> None:
-    """
-    Verify that the apply_callback_arguments decorator works as intended.
+    Verify that the as_dict decorator works as intended.
     """
 
-    def callback(x: int) -> int:
-        return x * 2
+    @as_dict
+    def get_key_value_pairs() -> Iterable[tuple[str, int]]:
+        yield ("one", 1)
+        yield ("two", 2)
+        yield ("three", 3)
 
-    @apply_callback_arguments(callback, x="x_lookup_arg")
-    def return_value(
-        x: int,
-        x_lookup_arg: str | None = None,  # noqa: ARG001
-    ) -> int:
-        return x**2
+    assert get_key_value_pairs() == {"one": 1, "two": 2, "three": 3}
 
-    assert return_value(x_lookup_arg=3) == 36
 
-    @apply_callback_arguments(callback, x="x_lookup_arg")
-    async def async_return_value(
-        x: int,
-        x_lookup_arg: str | None = None,  # noqa: ARG001
-    ) -> int:
-        await asyncio.sleep(0)
-        return x**2
+def test_as_tuple() -> None:
+    """
+    Verify that the as_tuple decorator works as intended.
+    """
 
-    assert asyncio.run(async_return_value(x_lookup_arg=3)) == 36
+    @as_tuple
+    def get_numbers() -> Iterable[int]:
+        yield 1
+        yield 2
+        yield 3
 
-    async def async_callback(x: int) -> int:
-        await asyncio.sleep(0)
-        return x * 2
+    assert get_numbers() == (1, 2, 3)
 
-    @apply_callback_arguments(async_callback, x="x_lookup_arg")
-    def return_value_with_async_callback(
-        x: int,
-        x_lookup_arg: str | None = None,  # noqa: ARG001
-    ) -> int:
-        return x**2
 
-    assert return_value_with_async_callback(x_lookup_arg=3) == 36
+def test_as_str() -> None:
+    """
+    Verify that the as_str decorator works as intended.
+    """
 
-    @apply_callback_arguments(async_callback, x="x_lookup_arg")
-    async def async_return_value_with_async_callback(
-        x: int,
-        x_lookup_arg: str | None = None,  # noqa: ARG001
-    ) -> int:
-        await asyncio.sleep(0)
-        return x**2
+    @as_str(separator=", ")
+    def get_fruits() -> Iterable[str]:
+        yield "apple"
+        yield "banana"
+        yield "cherry"
 
-    assert (
-        asyncio.run(async_return_value_with_async_callback(x_lookup_arg=3))
-        == 36
-    )
+    assert get_fruits() == "apple, banana, cherry"
+
+    @as_str
+    def get_vegetables() -> Iterable[str]:
+        yield "carrot\n"
+        yield "broccoli\n"
+        yield "spinach"
+
+    assert get_vegetables() == "carrot\nbroccoli\nspinach"
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", "-vv", __file__])
