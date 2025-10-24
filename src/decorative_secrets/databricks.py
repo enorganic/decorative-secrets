@@ -532,7 +532,7 @@ def _get_secret(
     config: Config | None = None,
     **env: str,  # noqa: ARG001
 ) -> str:
-    """w
+    """
     Get a secret from Databricks, and cache it based on parameters and
     environment variables (since these can change the host and authentication).
     """
