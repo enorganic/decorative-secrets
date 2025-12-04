@@ -12,8 +12,8 @@ from decorative_secrets._utilities import (
 )
 
 __all__: tuple[str, ...] = (
-    "apply_conditional_defaults",
     "ApplyConditionalDefaultsOptions",
+    "apply_conditional_defaults",
 )
 
 

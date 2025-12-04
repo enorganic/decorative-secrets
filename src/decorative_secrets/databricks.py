@@ -278,6 +278,7 @@ def _get_env_databricks_workspace_client(
     google_credentials: str | None = None,
     google_service_account: str | None = None,
     debug_truncate_bytes: int | None = None,
+    *,
     debug_headers: bool | None = None,
     product: str = "unknown",
     product_version: str = "0.0.0",
@@ -365,6 +366,7 @@ def get_databricks_workspace_client(
     google_credentials: str | None = None,
     google_service_account: str | None = None,
     debug_truncate_bytes: int | None = None,
+    *,
     debug_headers: bool | None = None,
     product: str = "unknown",
     product_version: str = "0.0.0",
@@ -427,6 +429,7 @@ def get_dbutils(
     google_credentials: str | None = None,
     google_service_account: str | None = None,
     debug_truncate_bytes: int | None = None,
+    *,
     debug_headers: bool | None = None,
     product: str = "unknown",
     product_version: str = "0.0.0",
@@ -445,12 +448,12 @@ def get_dbutils(
     """
     dbutils: RemoteDbUtils | None = None
     with suppress(ImportError):
-        from IPython.core.getipython import (  # type: ignore[import-not-found]
+        from IPython.core.getipython import (  # noqa: PLC0415  # type: ignore[import-not-found]
             get_ipython,
         )
 
         if TYPE_CHECKING:
-            from IPython.core.interactiveshell import (  # type: ignore[import-not-found]
+            from IPython.core.interactiveshell import (  # noqa: PLC0415  # type: ignore[import-not-found]
                 InteractiveShell,
             )
 
@@ -523,6 +526,7 @@ def _get_secret(
     google_credentials: str | None = None,
     google_service_account: str | None = None,
     debug_truncate_bytes: int | None = None,
+    *,
     debug_headers: bool | None = None,
     product: str = "unknown",
     product_version: str = "0.0.0",
@@ -588,6 +592,7 @@ def get_databricks_secret(
     google_credentials: str | None = None,
     google_service_account: str | None = None,
     debug_truncate_bytes: int | None = None,
+    *,
     debug_headers: bool | None = None,
     product: str = "unknown",
     product_version: str = "0.0.0",
@@ -684,6 +689,7 @@ def _get_scope_key_secret(
     google_credentials: str | None = None,
     google_service_account: str | None = None,
     debug_truncate_bytes: int | None = None,
+    *,
     debug_headers: bool | None = None,
     product: str = "unknown",
     product_version: str = "0.0.0",

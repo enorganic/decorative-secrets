@@ -14,8 +14,7 @@ def test_apply_environment_arguments(onepassword_vault: str) -> None:
     env: dict[str, str] = os.environ.copy()
     try:
         os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = read_onepassword_secret(
-            f"op://{onepassword_vault}/62u4plbr2i7ueb4boywtbbyd24/"
-            "credential",
+            f"op://{onepassword_vault}/62u4plbr2i7ueb4boywtbbyd24/credential",
             account="my.1password.com",
         )
 

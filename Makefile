@@ -8,6 +8,7 @@ install:
 	hatch env create default && \
 	hatch env create docs && \
 	hatch env create hatch-test && \
+	hatch env create hatch-static-analysis && \
 	echo "Installation complete"
 
 # Re-create all environments, from scratch (no reference to pinned
@@ -28,13 +29,21 @@ upgrade:
 	hatch run dependence upgrade\
 	 --include-pointer /tool/hatch/envs/default\
 	 --include-pointer /project\
+	 -aen all\
 	 pyproject.toml && \
 	hatch run docs:dependence upgrade\
 	 --include-pointer /tool/hatch/envs/docs\
+	 --include-pointer /project\
 	 pyproject.toml && \
 	hatch run hatch-test.py$(MINIMUM_PYTHON_VERSION):dependence upgrade\
 	 --include-pointer /tool/hatch/envs/hatch-test\
+	 --include-pointer /project\
+	 pyproject.toml && \
+	hatch run hatch-static-analysis:dependence upgrade\
+	 --include-pointer /tool/hatch/envs/hatch-static-analysis\
+	 --include-pointer /project\
 	 pyproject.toml
+	 
 
 # This will align project dependency versions with those installed in the
 # default environment
@@ -47,8 +56,18 @@ update:
 	 --include-pointer /project\
 	 -aen all\
 	 pyproject.toml && \
-	hatch run docs:dependence update pyproject.toml --include-pointer /tool/hatch/envs/docs && \
-	hatch run hatch-test.py$(MINIMUM_PYTHON_VERSION):dependence update pyproject.toml --include-pointer /tool/hatch/envs/hatch-test
+	hatch run docs:dependence update\
+	 --include-pointer /tool/hatch/envs/docs\
+	 --include-pointer /project\
+	 pyproject.toml && \
+	hatch run hatch-test.py$(MINIMUM_PYTHON_VERSION):dependence update\
+	 --include-pointer /tool/hatch/envs/hatch-test\
+	 --include-pointer /project\
+	 pyproject.toml && \
+	hatch run hatch-static-analysis:dependence update\
+	 --include-pointer /tool/hatch/envs/hatch-static-analysis\
+	 --include-pointer /project\
+	 pyproject.toml
 
 
 # Apply formatting and enforce linting

@@ -1,5 +1,5 @@
 from asyncio import iscoroutinefunction
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from functools import wraps
 from typing import Any, overload
 
@@ -161,5 +161,44 @@ def as_dict(
         @wraps(function)
         def wrapper(*args: Any, **kwargs: Any) -> dict[Any, Any]:
             return dict(function(*args, **kwargs) or ())
+
+    return wrapper
+
+
+def as_iter(
+    function: Callable[..., Iterable[Any]],
+) -> Callable[..., Any]:
+    """
+    This is a decorator which will return an iterator for a function
+    yielding an iterable.
+
+    Examples:
+        ```python
+        from decorative_secrets.utilities import as_iter
+        from collections.abc import Iterator
+
+
+        @as_iter
+        def get_settings() -> Iterable[tuple[str, Any]]:
+            yield ("host", "localhost")
+            yield ("port", 8080)
+            yield ("debug", True)
+
+
+        assert issubclass(get_settings(), Iterator)
+        ```
+    """
+
+    if iscoroutinefunction(function):
+
+        @wraps(function)
+        async def wrapper(*args: Any, **kwargs: Any) -> Iterator[Any]:
+            return iter(await function(*args, **kwargs) or ())
+
+    else:
+
+        @wraps(function)
+        def wrapper(*args: Any, **kwargs: Any) -> Iterator[Any]:
+            return iter(function(*args, **kwargs) or ())
 
     return wrapper

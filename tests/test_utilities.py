@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import pytest
 
-from decorative_secrets.utilities import as_dict, as_str, as_tuple
+from decorative_secrets.utilities import as_dict, as_iter, as_str, as_tuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -22,6 +23,20 @@ def test_as_dict() -> None:
         yield ("three", 3)
 
     assert get_key_value_pairs() == {"one": 1, "two": 2, "three": 3}
+
+
+def test_as_iter() -> None:
+    """
+    Verify that the `as_iter` decorator works as intended.
+    """
+
+    @as_iter
+    def get_key_value_pairs() -> Iterable[tuple[str, int]]:
+        yield ("one", 1)
+        yield ("two", 2)
+        yield ("three", 3)
+
+    assert isinstance(get_key_value_pairs(), Iterator)
 
 
 def test_as_tuple() -> None:
