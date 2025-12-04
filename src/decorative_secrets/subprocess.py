@@ -14,7 +14,7 @@ def check_output(
     *,
     text: Literal[True] = True,
     cwd: str | Path | None = None,
-    input: str | bytes | None = None,  # noqa: A002
+    input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
     echo: bool = False,
 ) -> str: ...
@@ -26,7 +26,7 @@ def check_output(
     *,
     text: Literal[False] = False,
     cwd: str | Path | None = None,
-    input: str | bytes | None = None,  # noqa: A002
+    input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
     echo: bool = False,
 ) -> bytes: ...
@@ -38,7 +38,7 @@ def check_output(
     *,
     text: None = None,
     cwd: str | Path | None = None,
-    input: str | bytes | None = None,  # noqa: A002
+    input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
     echo: bool = False,
 ) -> bytes: ...
