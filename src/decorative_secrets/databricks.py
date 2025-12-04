@@ -448,12 +448,12 @@ def get_dbutils(
     """
     dbutils: RemoteDbUtils | None = None
     with suppress(ImportError):
-        from IPython.core.getipython import (  # noqa: PLC0415  # type: ignore[import-not-found]
+        from IPython.core.getipython import (  # type: ignore[import-not-found]  # noqa: PLC0415
             get_ipython,
         )
 
         if TYPE_CHECKING:
-            from IPython.core.interactiveshell import (  # noqa: PLC0415  # type: ignore[import-not-found]
+            from IPython.core.interactiveshell import (  # type: ignore[import-not-found]  # noqa: PLC0415
                 InteractiveShell,
             )
 
