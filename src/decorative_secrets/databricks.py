@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from ast import Call
 import os
 import sys
 from contextlib import suppress
@@ -14,6 +15,7 @@ from urllib.request import urlopen
 from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
+    retry,
     which_brew,
     which_winget,
 )
@@ -214,6 +216,10 @@ def which_databricks() -> str:
 
 
 @cache
+@retry(
+    (CalledProcessError,),
+    number_of_attempts=3,
+)
 def _databricks_auth_login(
     host: str | None = None,
     profile: str | None = None,

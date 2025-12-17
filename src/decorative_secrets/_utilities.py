@@ -4,16 +4,18 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
-from functools import cache, partial, update_wrapper
+from functools import cache, partial, update_wrapper, wraps
 from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
 from subprocess import (
     CalledProcessError,
 )
+from time import sleep
 from traceback import format_exception
 from typing import TYPE_CHECKING, Any
 from urllib.request import urlopen
+from warnings import warn
 
 import nest_asyncio  # type: ignore[import-untyped]
 
@@ -22,6 +24,7 @@ from decorative_secrets.errors import (
     WinGetNotInstalledError,
 )
 from decorative_secrets.subprocess import check_output
+from decorative_secrets.utilities import as_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
@@ -123,20 +126,6 @@ def as_tuple(
     return update_wrapper(wrapper, user_function)
 
 
-def as_dict(
-    user_function: Callable[..., Iterable[tuple[Any, Any]]],
-) -> Callable[..., dict[Any, Any]]:
-    """
-    This is a decorator which will return an iterable of key/value pairs
-    as a dictionary.
-    """
-
-    def wrapper(*args: Any, **kwargs: Any) -> dict[Any, Any]:
-        return dict(user_function(*args, **kwargs) or ())
-
-    return update_wrapper(wrapper, user_function)
-
-
 @as_tuple
 def merge_function_signature_args_kwargs(
     function_signature: Signature, args: Iterable[Any], kwargs: dict[str, Any]
@@ -170,27 +159,6 @@ def get_signature_parameter_names_defaults(
     for parameter in function_signature.parameters.values():
         if (parameter.default is not Signature.empty) and parameter.name:
             yield parameter.name, parameter.default
-
-
-@as_dict
-def map_signature_parameter_names_args(
-    function_signature: Signature, args: Iterable[Any]
-) -> Iterable[tuple[str, Any]]:
-    """
-    This function returns a mapping of parameter names to values
-    for non-variable positional arguments.
-    """
-    value: Any
-    parameter: Parameter
-    if args:
-        for parameter, value in zip(
-            function_signature.parameters.values(), args, strict=False
-        ):
-            if parameter.kind not in (
-                Parameter.VAR_POSITIONAL,
-                Parameter.VAR_KEYWORD,
-            ):
-                yield parameter.name, value
 
 
 def get_function_signature_applicable_args_kwargs(
@@ -236,24 +204,6 @@ def get_function_signature_applicable_args_kwargs(
     return (tuple(args[:max_positional_argument_count]), applicable_kwargs)
 
 
-def get_function_signature_parameter_value_or_default(
-    function_signature: Signature | Callable,
-    parameter_name: str,
-    kwargs: dict[str, Any],
-    default: Any,
-) -> Any:
-    if not isinstance(function_signature, Signature):
-        function_signature = signature(function_signature)
-    value: Any = default
-    if parameter_name and (parameter_name in kwargs):
-        value = kwargs[parameter_name] or default
-    elif parameter_name in function_signature.parameters:
-        value = (
-            function_signature.parameters[parameter_name].default or default
-        )
-    return value
-
-
 def get_running_loop() -> asyncio.AbstractEventLoop | None:
     """
     Get the currently running event loop, or None if there is none.
@@ -284,6 +234,82 @@ def unwrap_function(
     while hasattr(function, "__wrapped__"):
         function = function.__wrapped__
     return function
+
+
+def _default_retry_hook(error: Exception) -> bool:
+    if not error:
+        raise ValueError(error)
+    return True
+
+
+def retry(  # noqa: C901
+    errors: tuple[type[Exception], ...],
+    retry_hook: Callable[[Exception], bool] = _default_retry_hook,
+    number_of_attempts: int = 2,
+) -> Callable:
+    """
+    This is a decorator which will retry a function a specified
+    number of times if it raises one of the specified errors types.
+
+    Parameters:
+        errors: A tuple of exception types which should trigger a retry.
+        retry_hook: A function which is called with the exception instance
+            when an error occurs. If this function returns `False`, the
+            exception is re-raised and no further retries are attempted.
+        number_of_attempts: The total number of attempts to make, including
+            the initial attempt.
+    """
+
+    def decorating_function(function: Callable) -> Callable:
+        attempt_number: int = 1
+        if iscoroutinefunction(function):
+
+            @wraps(function)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                nonlocal attempt_number
+                if number_of_attempts - attempt_number:
+                    # If `number_of_attempts` is greater than `attempt_number`,
+                    # we have remaining attempts to try, so catch errors.
+                    try:
+                        return await function(*args, **kwargs)
+                    except errors as error:
+                        if not retry_hook(error):
+                            raise
+                        warning_message: str = (
+                            f"Attempt # {attempt_number!s}:\n"
+                            f"{get_exception_text()}"
+                        )
+                        warn(warning_message, stacklevel=2)
+                        await asyncio.sleep(2**attempt_number)
+                        attempt_number += 1
+                        return await wrapper(*args, **kwargs)
+                # This is our last attempt, so just call the function.
+                return await function(*args, **kwargs)
+
+        else:
+
+            @wraps(function)
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                nonlocal attempt_number
+                if number_of_attempts - attempt_number:
+                    try:
+                        return function(*args, **kwargs)
+                    except errors as error:
+                        if not retry_hook(error):
+                            raise
+                        warning_message: str = (
+                            f"Attempt # {attempt_number!s}:\n"
+                            f"{get_exception_text()}"
+                        )
+                        warn(warning_message, stacklevel=2)
+                        sleep(2**attempt_number)
+                        attempt_number += 1
+                        return wrapper(*args, **kwargs)
+                return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorating_function
 
 
 _FUNCTIONS_ERRORS: dict[int, dict[str, list[str]]] = {}
