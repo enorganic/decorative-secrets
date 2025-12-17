@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 databricks = [
-    "databricks-sdk~=0.73",
+    "databricks-sdk~=0.76",
 ]
 aws = [
     "boto3~=1.42",
@@ -41,7 +41,7 @@ azure = [
     "azure-keyvault-secrets~=4.10",
 ]
 all = [
-    "databricks-sdk~=0.73",
+    "databricks-sdk~=0.76",
     "boto3~=1.42",
     "onepassword-sdk~=0.3",
     "onepasswordconnectsdk~=2.0",

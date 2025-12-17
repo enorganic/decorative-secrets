@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from ast import Call
 import os
 import sys
 from contextlib import suppress
