@@ -1,7 +1,12 @@
+import asyncio
 from asyncio import iscoroutinefunction
 from collections.abc import Callable, Iterable, Iterator
 from functools import wraps
+from time import sleep
 from typing import Any, overload
+from warnings import warn
+
+from decorative_secrets._utilities import get_exception_text
 
 
 def as_tuple(
@@ -202,3 +207,80 @@ def as_iter(
             return iter(function(*args, **kwargs) or ())
 
     return wrapper
+
+
+def _default_retry_hook(error: Exception) -> bool:
+    if not error:
+        raise ValueError(error)
+    return True
+
+
+def retry(  # noqa: C901
+    errors: tuple[type[Exception], ...],
+    retry_hook: Callable[[Exception], bool] = _default_retry_hook,
+    number_of_attempts: int = 2,
+) -> Callable:
+    """
+    This is a decorator which will retry a function a specified
+    number of times, with exponential backoff, if it raises one of the
+    specified errors types.
+
+    Parameters:
+        errors: A tuple of exception types which should trigger a retry.
+        retry_hook: A function which is called with the exception instance
+            when an error occurs. If this function returns `False`, the
+            exception is re-raised and no further retries are attempted.
+        number_of_attempts: The total number of attempts to make, including
+            the initial attempt.
+    """
+
+    def decorating_function(function: Callable) -> Callable:
+        attempt_number: int = 1
+        if iscoroutinefunction(function):
+
+            @wraps(function)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                nonlocal attempt_number
+                if number_of_attempts - attempt_number:
+                    # If `number_of_attempts` is greater than `attempt_number`,
+                    # we have remaining attempts to try, so catch errors.
+                    try:
+                        return await function(*args, **kwargs)
+                    except errors as error:
+                        if not retry_hook(error):
+                            raise
+                        warning_message: str = (
+                            f"Attempt # {attempt_number!s}:\n"
+                            f"{get_exception_text()}"
+                        )
+                        warn(warning_message, stacklevel=2)
+                        await asyncio.sleep(2**attempt_number)
+                        attempt_number += 1
+                        return await wrapper(*args, **kwargs)
+                # This is our last attempt, so just call the function.
+                return await function(*args, **kwargs)
+
+        else:
+
+            @wraps(function)
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                nonlocal attempt_number
+                if number_of_attempts - attempt_number:
+                    try:
+                        return function(*args, **kwargs)
+                    except errors as error:
+                        if not retry_hook(error):
+                            raise
+                        warning_message: str = (
+                            f"Attempt # {attempt_number!s}:\n"
+                            f"{get_exception_text()}"
+                        )
+                        warn(warning_message, stacklevel=2)
+                        sleep(2**attempt_number)
+                        attempt_number += 1
+                        return wrapper(*args, **kwargs)
+                return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorating_function

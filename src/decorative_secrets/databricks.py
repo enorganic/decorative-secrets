@@ -14,7 +14,6 @@ from urllib.request import urlopen
 from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
-    retry,
     which_brew,
     which_winget,
 )
@@ -24,6 +23,7 @@ from decorative_secrets.errors import (
     HomebrewNotInstalledError,
 )
 from decorative_secrets.subprocess import check_call, check_output
+from decorative_secrets.utilities import retry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

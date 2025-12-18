@@ -7,8 +7,8 @@ from typing import Any
 
 from decorative_secrets._utilities import (
     _FUNCTIONS_ERRORS,
-    _get_errors,
     asyncio_run,
+    get_errors,
     get_exception_text,
     iscoroutinefunction,
     merge_function_signature_args_kwargs,
@@ -118,7 +118,7 @@ def apply_callback_arguments(  # noqa: C901
             argument is not passed explicitly.
             """
             # Capture errors
-            errors: dict[str, list[str]] = _get_errors(original_function)
+            errors: dict[str, list[str]] = get_errors(original_function)
             # First we consolidate the keyword arguments with any arguments
             # which are passed to parameters which can be either positional
             # *or* keyword arguments, and were passed as positional arguments
