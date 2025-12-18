@@ -11,7 +11,6 @@ from shutil import which
 from subprocess import (
     CalledProcessError,
 )
-from traceback import format_exception
 from typing import TYPE_CHECKING, Any
 from urllib.request import urlopen
 
@@ -32,16 +31,6 @@ def iscoroutinefunction(function: Any) -> bool:
     if isinstance(function, partial):
         return iscoroutinefunction(function.func)
     return asyncio.iscoroutinefunction(function)
-
-
-def get_exception_text() -> str:
-    """
-    When called within an exception, this function returns a text
-    representation of the error matching what is found in
-    `traceback.print_exception`, but is returned as a string value rather than
-    printing.
-    """
-    return "".join(format_exception(*sys.exc_info()))
 
 
 HOMEBREW_INSTALL_SH: str = (

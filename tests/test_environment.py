@@ -5,9 +5,9 @@ from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
 
-from decorative_secrets._utilities import get_exception_text
 from decorative_secrets.environment import apply_environment_arguments
 from decorative_secrets.onepassword import read_onepassword_secret
+from decorative_secrets.utilities import get_exception_text
 
 
 def test_apply_environment_arguments(onepassword_vault: str) -> None:

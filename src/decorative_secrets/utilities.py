@@ -1,12 +1,12 @@
 import asyncio
+import sys
 from asyncio import iscoroutinefunction
 from collections.abc import Callable, Iterable, Iterator
 from functools import wraps
 from time import sleep
+from traceback import format_exception
 from typing import Any, overload
 from warnings import warn
-
-from decorative_secrets._utilities import get_exception_text
 
 
 def as_tuple(
@@ -284,3 +284,13 @@ def retry(  # noqa: C901
         return wrapper
 
     return decorating_function
+
+
+def get_exception_text() -> str:
+    """
+    When called within an exception, this function returns a text
+    representation of the error matching what is found in
+    `traceback.print_exception`, but is returned as a string value rather than
+    printing.
+    """
+    return "".join(format_exception(*sys.exc_info()))

@@ -9,12 +9,12 @@ from decorative_secrets._utilities import (
     _FUNCTIONS_ERRORS,
     asyncio_run,
     get_errors,
-    get_exception_text,
     iscoroutinefunction,
     merge_function_signature_args_kwargs,
     unwrap_function,
 )
 from decorative_secrets.errors import ArgumentsResolutionError
+from decorative_secrets.utilities import get_exception_text
 
 
 def _get_sync_async_callbacks(

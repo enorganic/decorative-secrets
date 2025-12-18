@@ -8,7 +8,6 @@ from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
 
-from decorative_secrets._utilities import get_exception_text
 from decorative_secrets.environment import apply_environment_arguments
 from decorative_secrets.errors import (
     ArgumentsResolutionError,
@@ -24,6 +23,7 @@ from decorative_secrets.onepassword import (
     which_op,
 )
 from decorative_secrets.subprocess import check_output
+from decorative_secrets.utilities import get_exception_text
 
 
 def test_which_op() -> None:
