@@ -7,13 +7,13 @@ from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
 
-from decorative_secrets._utilities import get_exception_text
 from decorative_secrets.databricks import (
     _install_databricks_cli,
     _install_sh_databricks_cli,
     apply_databricks_secrets_arguments,
     get_databricks_secret,
 )
+from decorative_secrets.utilities import get_exception_text
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

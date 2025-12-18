@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 from decorative_secrets import __name__ as _module_name
-from decorative_secrets._utilities import get_exception_text
+from decorative_secrets.utilities import get_exception_text
 
 
 def _print_help() -> None:
