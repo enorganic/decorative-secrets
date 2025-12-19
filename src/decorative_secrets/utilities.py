@@ -7,7 +7,6 @@ from functools import wraps
 from time import sleep
 from traceback import format_exception
 from typing import Any, Protocol, overload
-from warnings import warn
 
 
 def as_tuple(
@@ -225,12 +224,16 @@ class _RetryHook(Protocol):
     ) -> bool: ...
 
 
+class _AsyncRetryHook(Protocol):
+    async def __call__(
+        self, error: Exception, *args: Any, **kwargs: Any
+    ) -> bool: ...
+
+
 def retry(  # noqa: C901
     errors: tuple[type[Exception], ...],
-    retry_hook: _RetryHook = _default_retry_hook,
+    retry_hook: _RetryHook | _AsyncRetryHook = _default_retry_hook,
     number_of_attempts: int = 2,
-    *,
-    emit_warning: bool = False,
 ) -> Callable:
     """
     This is a decorator which will retry a function a specified
@@ -240,14 +243,14 @@ def retry(  # noqa: C901
     Parameters:
         errors: A tuple of exception types which should trigger a retry.
         retry_hook: A function which is called with the exception instance
-            and attempt number when an error occurs. If this function returns
-            `False`, the exception is re-raised and no further retries are
-            attempted.
+            (optionally) and an attempt number when an error occurs. If this
+            function returns `False`, the exception is re-raised and no further
+            retries are attempted.
         number_of_attempts: The total number of attempts to make, including
             the initial attempt.
     """
 
-    def decorating_function(function: Callable) -> Callable:  # noqa: C901
+    def decorating_function(function: Callable) -> Callable:
         attempt_number: int = 1
         if iscoroutinefunction(function):
 
@@ -261,18 +264,25 @@ def retry(  # noqa: C901
                         return await function(*args, **kwargs)
                     except errors as error:
                         if not (
-                            retry_hook(error, attempt_number)
-                            if len(inspect.signature(retry_hook).parameters)
-                            > 1  # noqa: PLR2004
-                            else retry_hook(error)
+                            (
+                                await retry_hook(error, attempt_number)
+                                if len(
+                                    inspect.signature(retry_hook).parameters
+                                )
+                                > 1
+                                else await retry_hook(error)
+                            )
+                            if iscoroutinefunction(retry_hook)
+                            else (
+                                retry_hook(error, attempt_number)
+                                if len(
+                                    inspect.signature(retry_hook).parameters
+                                )
+                                > 1
+                                else retry_hook(error)
+                            )
                         ):
                             raise
-                        if emit_warning:
-                            warning_message: str = (
-                                f"Attempt # {attempt_number!s}:\n"
-                                f"{get_exception_text()}"
-                            )
-                            warn(warning_message, stacklevel=2)
                         await asyncio.sleep(2**attempt_number)
                         attempt_number += 1
                         return await wrapper(*args, **kwargs)
@@ -291,16 +301,10 @@ def retry(  # noqa: C901
                         if not (
                             retry_hook(error, attempt_number)
                             if len(inspect.signature(retry_hook).parameters)
-                            > 1  # noqa: PLR2004
+                            > 1
                             else retry_hook(error)
                         ):
                             raise
-                        if emit_warning:
-                            warning_message: str = (
-                                f"Attempt # {attempt_number!s}:\n"
-                                f"{get_exception_text()}"
-                            )
-                            warn(warning_message, stacklevel=2)
                         sleep(2**attempt_number)
                         attempt_number += 1
                         return wrapper(*args, **kwargs)
