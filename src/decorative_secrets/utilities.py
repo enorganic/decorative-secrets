@@ -263,7 +263,7 @@ def retry(  # noqa: C901
                         if not (
                             retry_hook(error, attempt_number)
                             if len(inspect.signature(retry_hook).parameters)
-                            == 2  # noqa: PLR2004
+                            > 1  # noqa: PLR2004
                             else retry_hook(error)
                         ):
                             raise
@@ -291,7 +291,7 @@ def retry(  # noqa: C901
                         if not (
                             retry_hook(error, attempt_number)
                             if len(inspect.signature(retry_hook).parameters)
-                            == 2  # noqa: PLR2004
+                            > 1  # noqa: PLR2004
                             else retry_hook(error)
                         ):
                             raise
