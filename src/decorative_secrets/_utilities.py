@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 def iscoroutinefunction(function: Any) -> bool:
     if isinstance(function, partial):
         return iscoroutinefunction(function.func)
-    return inspect.iscoroutinefunction(function)
+    return asyncio.iscoroutinefunction(function)
 
 
 HOMEBREW_INSTALL_SH: str = (
