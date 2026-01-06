@@ -4,7 +4,7 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
-from functools import cache, partial, update_wrapper
+from functools import cache, update_wrapper
 from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
@@ -25,12 +25,6 @@ from decorative_secrets.utilities import as_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
-
-
-def iscoroutinefunction(function: Any) -> bool:
-    if isinstance(function, partial):
-        return iscoroutinefunction(function.func)
-    return asyncio.iscoroutinefunction(function)
 
 
 HOMEBREW_INSTALL_SH: str = (
@@ -231,5 +225,4 @@ def get_errors(function: Callable[..., Any]) -> dict[str, list[str]]:
     This function retrieves the current function errors.
     """
     function_id: int = id(function)
-    _FUNCTIONS_ERRORS.setdefault(function_id, {})
-    return _FUNCTIONS_ERRORS[function_id]
+    return _FUNCTIONS_ERRORS.setdefault(function_id, {})

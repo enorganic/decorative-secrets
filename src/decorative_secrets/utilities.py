@@ -1,16 +1,27 @@
 import asyncio
 import inspect
 import sys
-from asyncio import iscoroutinefunction
-from collections.abc import Callable, Iterable, Iterator
-from functools import wraps
+from collections.abc import Awaitable, Callable, Iterable, Iterator
+from functools import partial, wraps
 from time import sleep
 from traceback import format_exception
 from typing import Any, Protocol, overload
 
 
+def iscoroutinefunction(function: Any) -> bool:
+    """
+    An adaptation of `asyncio.iscoroutinefunction`
+    """
+    if isinstance(function, partial):
+        return iscoroutinefunction(function.func)
+    return (
+        inspect.iscoroutinefunction(function)
+        or type(getattr(function, "_is_coroutine", None)) is object
+    )
+
+
 def as_tuple(
-    function: Callable[..., Iterable[Any]],
+    function: Callable[..., Iterable[Any] | Awaitable[Iterable[Any]]],
 ) -> Callable[..., Any]:
     """
     This is a decorator which will return an iterable as a tuple.
@@ -34,13 +45,17 @@ def as_tuple(
 
         @wraps(function)
         async def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, ...]:
-            return tuple(await function(*args, **kwargs) or ())
+            return tuple(  # --
+                await function(*args, **kwargs) or ()  # type: ignore[misc]
+            )
 
     else:
 
         @wraps(function)
         def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, ...]:
-            return tuple(function(*args, **kwargs) or ())
+            return tuple(
+                function(*args, **kwargs) or ()  # type: ignore[arg-type]
+            )
 
     return wrapper
 
@@ -60,7 +75,9 @@ def as_str(
 
 
 def as_str(
-    function: Callable[..., Iterable[str]] | None = None,
+    function: Callable[..., Iterable[str]]
+    | Awaitable[Iterable[Any]]
+    | None = None,
     separator: str = "",
 ) -> Callable[..., Callable[..., str]] | Callable[..., str]:
     """
@@ -114,7 +131,10 @@ def as_str(
             @wraps(user_function)
             async def wrapper(*args: Any, **kwargs: Any) -> str:
                 return separator.join(
-                    await user_function(*args, **kwargs) or ()
+                    await user_function(  # type: ignore[misc]
+                        *args, **kwargs
+                    )
+                    or ()
                 )
 
         else:
@@ -127,11 +147,13 @@ def as_str(
 
     if function is None:
         return decorating_function
-    return decorating_function(function)
+    return decorating_function(function)  # type: ignore[arg-type]
 
 
 def as_dict(
-    function: Callable[..., Iterable[tuple[Any, Any]]],
+    function: Callable[
+        ..., Iterable[tuple[Any, Any]] | Awaitable[Iterable[tuple[Any, Any]]]
+    ],
 ) -> Callable[..., Any]:
     """
     This is a decorator which will return an iterable of key/value pairs
@@ -159,13 +181,17 @@ def as_dict(
 
         @wraps(function)
         async def wrapper(*args: Any, **kwargs: Any) -> dict[Any, Any]:
-            return dict(await function(*args, **kwargs) or ())
+            return dict(
+                await function(*args, **kwargs) or ()  # type: ignore[misc]
+            )
 
     else:
 
         @wraps(function)
         def wrapper(*args: Any, **kwargs: Any) -> dict[Any, Any]:
-            return dict(function(*args, **kwargs) or ())
+            return dict(
+                function(*args, **kwargs) or ()  # type: ignore[arg-type]
+            )
 
     return wrapper
 
@@ -198,7 +224,9 @@ def as_iter(
 
         @wraps(function)
         async def wrapper(*args: Any, **kwargs: Any) -> Iterator[Any]:
-            return iter(await function(*args, **kwargs) or ())
+            return iter(
+                await function(*args, **kwargs) or ()  # type: ignore[misc]
+            )
 
     else:
 
@@ -265,12 +293,16 @@ def retry(  # noqa: C901
                     except errors as error:
                         if not (
                             (
-                                await retry_hook(error, attempt_number)
+                                await retry_hook(  # type: ignore[misc]
+                                    error, attempt_number
+                                )
                                 if len(
                                     inspect.signature(retry_hook).parameters
                                 )
                                 > 1
-                                else await retry_hook(error)
+                                else await retry_hook(  # type: ignore[misc]
+                                    error
+                                )
                             )
                             if iscoroutinefunction(retry_hook)
                             else (

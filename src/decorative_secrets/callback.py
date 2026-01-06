@@ -9,12 +9,14 @@ from decorative_secrets._utilities import (
     _FUNCTIONS_ERRORS,
     asyncio_run,
     get_errors,
-    iscoroutinefunction,
     merge_function_signature_args_kwargs,
     unwrap_function,
 )
 from decorative_secrets.errors import ArgumentsResolutionError
-from decorative_secrets.utilities import get_exception_text
+from decorative_secrets.utilities import (
+    get_exception_text,
+    iscoroutinefunction,
+)
 
 
 def _get_sync_async_callbacks(
@@ -194,7 +196,7 @@ def apply_callback_arguments(  # noqa: C901
                                     argument_error_messages
                                 )
                     # Clear global errors collection
-                    del _FUNCTIONS_ERRORS[id(function)]
+                    _FUNCTIONS_ERRORS.pop(id(function), None)
                     if arguments_error_messages:
                         raise ArgumentsResolutionError(
                             arguments_error_messages

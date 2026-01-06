@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.8.1"
+version = "0.8.2"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -131,6 +131,7 @@ python = [
     "3.11",
     "3.12",
     "3.13",
+    "3.14",
 ]
 
 [tool.hatch.env.collectors.custom]
