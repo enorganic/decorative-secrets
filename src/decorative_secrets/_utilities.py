@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import sys
 from contextlib import suppress
@@ -28,9 +29,15 @@ if TYPE_CHECKING:
 
 
 def iscoroutinefunction(function: Any) -> bool:
+    """
+    An adaptation of `asyncio.iscoroutinefunction`
+    """
     if isinstance(function, partial):
         return iscoroutinefunction(function.func)
-    return asyncio.iscoroutinefunction(function)
+    return (
+        inspect.iscoroutinefunction(function)
+        or type(getattr(function, "_is_coroutine", None)) is object
+    )
 
 
 HOMEBREW_INSTALL_SH: str = (
