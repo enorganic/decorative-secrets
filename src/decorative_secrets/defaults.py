@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-from inspect import Signature, iscoroutinefunction, signature
+from inspect import Signature, signature
 from typing import Any
 
 from decorative_secrets._utilities import (
@@ -10,6 +10,7 @@ from decorative_secrets._utilities import (
     merge_function_signature_args_kwargs,
     unwrap_function,
 )
+from decorative_secrets.utilities import iscoroutinefunction
 
 __all__: tuple[str, ...] = (
     "ApplyConditionalDefaultsOptions",

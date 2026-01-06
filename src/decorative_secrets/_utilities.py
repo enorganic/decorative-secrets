@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import os
 import sys
 from contextlib import suppress
-from functools import cache, partial, update_wrapper
+from functools import cache, update_wrapper
 from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
@@ -26,18 +25,6 @@ from decorative_secrets.utilities import as_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
-
-
-def iscoroutinefunction(function: Any) -> bool:
-    """
-    An adaptation of `asyncio.iscoroutinefunction`
-    """
-    if isinstance(function, partial):
-        return iscoroutinefunction(function.func)
-    return (
-        inspect.iscoroutinefunction(function)
-        or type(getattr(function, "_is_coroutine", None)) is object
-    )
 
 
 HOMEBREW_INSTALL_SH: str = (
