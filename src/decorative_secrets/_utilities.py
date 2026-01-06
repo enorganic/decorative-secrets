@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import sys
 from contextlib import suppress
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 def iscoroutinefunction(function: Any) -> bool:
     if isinstance(function, partial):
         return iscoroutinefunction(function.func)
-    return asyncio.iscoroutinefunction(function)
+    return inspect.iscoroutinefunction(function)
 
 
 HOMEBREW_INSTALL_SH: str = (
@@ -231,5 +232,4 @@ def get_errors(function: Callable[..., Any]) -> dict[str, list[str]]:
     This function retrieves the current function errors.
     """
     function_id: int = id(function)
-    _FUNCTIONS_ERRORS.setdefault(function_id, {})
-    return _FUNCTIONS_ERRORS[function_id]
+    return _FUNCTIONS_ERRORS.setdefault(function_id, {})
