@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import os
 import sys
 from contextlib import suppress
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
+    from databricks.sdk.oauth import AuthorizationDetail
 
 
 @dataclass
@@ -291,6 +293,8 @@ def _get_env_databricks_workspace_client(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
+    scopes: list[str] | None = None,
+    authorization_details: list[AuthorizationDetail] | None = None,
     **env: str,  # noqa: ARG001
 ) -> WorkspaceClient:
     """
@@ -316,33 +320,47 @@ def _get_env_databricks_workspace_client(
             for key in os.environ:
                 if key.startswith("DATABRICKS_"):
                     os.environ.pop(key, None)
+        parameter_name: str
+        argument: Any
         client: WorkspaceClient = WorkspaceClient(
-            host=host,
-            account_id=account_id,
-            username=username,
-            password=password,
-            client_id=client_id,
-            client_secret=client_secret,
-            token=token,
-            profile=profile,
-            config_file=config_file,
-            azure_workspace_resource_id=azure_workspace_resource_id,
-            azure_client_secret=azure_client_secret,
-            azure_client_id=azure_client_id,
-            azure_tenant_id=azure_tenant_id,
-            azure_environment=azure_environment,
-            auth_type=auth_type,
-            cluster_id=cluster_id,
-            google_credentials=google_credentials,
-            google_service_account=google_service_account,
-            debug_truncate_bytes=debug_truncate_bytes,
-            debug_headers=debug_headers,
-            product=product,
-            product_version=product_version,
-            credentials_strategy=credentials_strategy,
-            credentials_provider=credentials_provider,
-            token_audience=token_audience,
-            config=config,
+            **{  # type: ignore[arg-type]
+                parameter_name: argument
+                for parameter_name, argument in (
+                    ("host", host),
+                    ("account_id", account_id),
+                    ("username", username),
+                    ("password", password),
+                    ("client_id", client_id),
+                    ("client_secret", client_secret),
+                    ("token", token),
+                    ("profile", profile),
+                    ("config_file", config_file),
+                    (
+                        "azure_workspace_resource_id",
+                        azure_workspace_resource_id,
+                    ),
+                    ("azure_client_secret", azure_client_secret),
+                    ("azure_client_id", azure_client_id),
+                    ("azure_tenant_id", azure_tenant_id),
+                    ("azure_environment", azure_environment),
+                    ("auth_type", auth_type),
+                    ("cluster_id", cluster_id),
+                    ("google_credentials", google_credentials),
+                    ("google_service_account", google_service_account),
+                    ("debug_truncate_bytes", debug_truncate_bytes),
+                    ("debug_headers", debug_headers),
+                    ("product", product),
+                    ("product_version", product_version),
+                    ("credentials_strategy", credentials_strategy),
+                    ("credentials_provider", credentials_provider),
+                    ("token_audience", token_audience),
+                    ("config", config),
+                    ("scopes", scopes),
+                    ("authorization_details", authorization_details),
+                )
+                if parameter_name
+                in inspect.signature(WorkspaceClient.__init__).parameters
+            }
         )
     finally:
         if profile:
