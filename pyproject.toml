@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.8.3"
+version = "0.8.4"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 databricks = [
-    "databricks-sdk~=0.76",
+    "databricks-sdk",
 ]
 aws = [
     "boto3~=1.42",
