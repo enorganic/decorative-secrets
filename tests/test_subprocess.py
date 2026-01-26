@@ -57,5 +57,4 @@ def test_check_output() -> None:
 
 
 if __name__ == "__main__":
-    # pytest.main(["-s", "-vv", __file__])
-    test_check_output()
+    pytest.main(["-s", "-vv", __file__])

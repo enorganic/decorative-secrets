@@ -82,7 +82,8 @@ def check_output(
             print("$", list2cmdline(args))  # noqa: T201
     if isinstance(input, bytes) and text:
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
-    with NamedTemporaryFile("w+b") as stderr:
+
+    with NamedTemporaryFile("w+") as stderr:
         try:
             completed_process: CompletedProcess = run(
                 args,
@@ -95,8 +96,7 @@ def check_output(
                 text=text,
             )
         except CalledProcessError as error:
-            with open(stderr.name) as stderr_file:
-                error.stderr = StringIO(stderr_file.read())
+            error.stderr = StringIO(stderr.read())
             raise
     output: str | bytes | None = None
     if text is None:
