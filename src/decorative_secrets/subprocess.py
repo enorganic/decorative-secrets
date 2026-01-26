@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from subprocess import DEVNULL, PIPE, CompletedProcess, list2cmdline, run
+from io import StringIO
+from subprocess import (
+    PIPE,
+    CalledProcessError,
+    CompletedProcess,
+    list2cmdline,
+    run,
+)
+from tempfile import TemporaryFile
 from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
@@ -74,16 +82,22 @@ def check_output(
             print("$", list2cmdline(args))  # noqa: T201
     if isinstance(input, bytes) and text:
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
-    completed_process: CompletedProcess = run(
-        args,
-        stdout=PIPE,
-        stderr=DEVNULL,
-        check=True,
-        cwd=cwd or None,
-        input=input,
-        env=env,
-        text=text,
-    )
+
+    with TemporaryFile("w+") as stderr:
+        try:
+            completed_process: CompletedProcess = run(
+                args,
+                stdout=PIPE,
+                stderr=stderr,  # DEVNULL,
+                check=True,
+                cwd=cwd or None,
+                input=input,
+                env=env,
+                text=text,
+            )
+        except CalledProcessError as error:
+            error.stderr = StringIO(stderr.read())
+            raise
     output: str | bytes | None = None
     if text is None:
         pass
