@@ -8,7 +8,7 @@ from subprocess import (
     list2cmdline,
     run,
 )
-from tempfile import NamedTemporaryFile
+from tempfile import TemporaryFile
 from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ def check_output(
     if isinstance(input, bytes) and text:
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
 
-    with NamedTemporaryFile("w+") as stderr:
+    with TemporaryFile("w+") as stderr:
         try:
             completed_process: CompletedProcess = run(
                 args,
