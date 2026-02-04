@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.8.5"
+version = "0.8.8"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -20,7 +20,7 @@ keywords = [
 ]
 dependencies = [
     "nest-asyncio~=1.6",
-    "async-lru~=2.0",
+    "async-lru~=2.1",
 ]
 
 [project.optional-dependencies]
@@ -41,7 +41,7 @@ azure = [
     "azure-keyvault-secrets~=4.10",
 ]
 all = [
-    "databricks-sdk~=0.76",
+    "databricks-sdk",
     "boto3~=1.42",
     "onepassword-sdk~=0.3",
     "onepasswordconnectsdk~=2.0",
