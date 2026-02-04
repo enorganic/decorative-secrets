@@ -305,8 +305,16 @@ def _get_env_databricks_workspace_client(
         host = host or config.host
         profile = profile or config.profile
     if not (
-        (client_id or os.getenv("DATABRICKS_CLIENT_ID"))
-        and (client_secret or os.getenv("DATABRICKS_CLIENT_SECRET"))
+        (
+            client_id
+            or os.getenv("DATABRICKS_CLIENT_ID")
+            or (config and config.client_id)
+        )
+        and (
+            client_secret
+            or os.getenv("DATABRICKS_CLIENT_SECRET")
+            or (config and config.client_secret)
+        )
     ):
         with suppress(
             CalledProcessError,
