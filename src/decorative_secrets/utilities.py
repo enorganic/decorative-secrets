@@ -1,11 +1,13 @@
 import asyncio
 import inspect
+import logging
 import sys
 from collections.abc import Awaitable, Callable, Iterable, Iterator
 from functools import partial, wraps
 from time import sleep
 from traceback import format_exception
 from typing import Any, Protocol, overload
+from warnings import warn
 
 
 def iscoroutinefunction(function: Any) -> bool:
@@ -240,27 +242,111 @@ def as_iter(
 def _default_retry_hook(
     error: Exception,
     attempt_number: int,  # noqa: ARG001
+    *args: Any,  # noqa: ARG001
+    **kwargs: Any,  # noqa: ARG001
 ) -> bool:
+    """
+    This is a retry hook which simply returns `True` for any error
+    instance, allowing all retries to proceed.
+    """
     if not error:
         raise ValueError(error)
     return True
 
 
-class _RetryHook(Protocol):
+class RetryHook(Protocol):
     def __call__(
         self, error: Exception, *args: Any, **kwargs: Any
     ) -> bool: ...
 
 
-class _AsyncRetryHook(Protocol):
+class AsyncRetryHook(Protocol):
     async def __call__(
         self, error: Exception, *args: Any, **kwargs: Any
     ) -> bool: ...
 
 
+def warn_retry_hook(
+    error: Exception,
+    attempt_number: int,
+    *args: Any,  # noqa: ARG001
+    **kwargs: Any,  # noqa: ARG001
+) -> bool:
+    """
+    This is a retry hook which will issue a warning and retry number
+    whenever an error occurs.
+    """
+    message: str = f"Attempt # {attempt_number} failed with error: {error}"
+    warn(
+        message,
+        stacklevel=2,
+    )
+    return True
+
+
+def create_log_warning_retry_hook(
+    logger: logging.Logger,
+) -> RetryHook:
+    """
+    This factory creates a retry hook which logs warning using the provided
+    logger.
+
+    Parameters:
+        logger: The logger to use for logging warnings.
+    """
+
+    def retry_hook(
+        error: Exception,
+        attempt_number: int,
+        *args: Any,  # noqa: ARG001
+        **kwargs: Any,  # noqa: ARG001
+    ) -> bool:
+        logger.warning(
+            "Attempt # %d failed with error: %s",
+            attempt_number,
+            str(error),
+            stacklevel=2,
+        )
+        return True
+
+    return retry_hook
+
+
+def create_async_log_warning_retry_hook(
+    logger: logging.Logger,
+) -> AsyncRetryHook:
+    """
+    This factory creates an async retry hook which logs warning using the
+    provided logger.
+
+    !!! Note
+        Please make sure to use a [non-blocking logger
+        ](https://docs.python.org/3/howto/logging-cookbook.html#dealing-with-handlers-that-block).
+
+    Parameters:
+        logger: The logger to use for logging warnings.
+    """
+
+    async def retry_hook(
+        error: Exception,
+        attempt_number: int,
+        *args: Any,  # noqa: ARG001
+        **kwargs: Any,  # noqa: ARG001
+    ) -> bool:
+        logger.warning(
+            "Attempt # %d failed with error: %s",
+            attempt_number,
+            str(error),
+            stacklevel=2,
+        )
+        return True
+
+    return retry_hook
+
+
 def retry(  # noqa: C901
     errors: tuple[type[Exception], ...],
-    retry_hook: _RetryHook | _AsyncRetryHook = _default_retry_hook,
+    retry_hook: RetryHook | AsyncRetryHook = _default_retry_hook,
     number_of_attempts: int = 2,
 ) -> Callable:
     """
