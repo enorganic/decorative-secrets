@@ -217,6 +217,18 @@ def which_databricks() -> str:
     return databricks
 
 
+class _DatabricksAuthProfile(TypedDict, total=False):
+    name: str
+    host: str
+    cloud: str
+    auth_type: str
+    valid: bool
+
+
+class _DatabricksAuthProfiles(TypedDict, total=True):
+    profiles: list[_DatabricksAuthProfile]
+
+
 class _DatabricksAuthDescription(TypedDict, total=False):
     status: str
     username: str
@@ -224,11 +236,27 @@ class _DatabricksAuthDescription(TypedDict, total=False):
     error: dict[str, Any]
 
 
+def _databricks_auth_profiles() -> _DatabricksAuthProfiles:
+    databricks: str = which_databricks()
+    return json.loads(
+        check_output(
+            (databricks, "auth", "profiles", "-o", "json"),
+            input=b"\n\n",
+        )
+    )
+
+
 def _databricks_auth_describe(
     host: str | None = None,
     profile: str | None = None,
     target: str | None = None,
 ) -> _DatabricksAuthDescription:
+    if host and not profile:
+        auth_profile: _DatabricksAuthProfile
+        for auth_profile in _databricks_auth_profiles()["profiles"]:
+            if auth_profile.get("host") == host:
+                profile = auth_profile.get("name")
+                break
     databricks: str = which_databricks()
     output: str
     if host or profile or target:
@@ -244,12 +272,14 @@ def _databricks_auth_describe(
                 *(("--target", target) if target else ()),
             ),
             input=b"\n\n",
+            echo=True,
         )
     else:
         # Automatically select the default/first profile if no host,
         # profile, or target is specified
         output = check_output(
-            (databricks, "auth", "describe", "-o", "json"), input=b"\n\n"
+            (databricks, "auth", "describe", "-o", "json"),
+            input=b"\n\n",
         )
     return json.loads(output)
 
@@ -264,6 +294,12 @@ def _databricks_auth_login(
     profile: str | None = None,
     target: str | None = None,
 ) -> None:
+    if host and not profile:
+        auth_profile: _DatabricksAuthProfile
+        for auth_profile in _databricks_auth_profiles()["profiles"]:
+            if auth_profile.get("host") == host:
+                profile = auth_profile.get("name")
+                break
     databricks: str = which_databricks()
     if host or profile or target:
         check_call(
@@ -299,15 +335,15 @@ def databricks_auth_login(
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
-    with suppress(CalledProcessError):
-        # If we are already authenticated, don't attempt to log in again
-        if (
-            _databricks_auth_describe(
-                host=host, profile=profile, target=target
-            ).get("status")
-            == "success"
-        ):
-            return
+    # with suppress(CalledProcessError):
+    # If we are already authenticated, don't attempt to log in again
+    if (
+        _databricks_auth_describe(
+            host=host, profile=profile, target=target
+        ).get("status")
+        == "success"
+    ):
+        return
     return _databricks_auth_login(host=host, profile=profile, target=target)
 
 
