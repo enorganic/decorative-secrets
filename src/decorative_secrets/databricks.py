@@ -236,6 +236,17 @@ class _DatabricksAuthDescription(TypedDict, total=False):
     error: dict[str, Any]
 
 
+def _get_host_profile(
+    host: str,
+) -> str | None:
+    host = host.lower()
+    auth_profile: _DatabricksAuthProfile
+    for auth_profile in _databricks_auth_profiles()["profiles"]:
+        if auth_profile.get("host", "").lower() == host:
+            return auth_profile.get("name")
+    return None
+
+
 def _databricks_auth_profiles() -> _DatabricksAuthProfiles:
     databricks: str = which_databricks()
     return json.loads(
@@ -252,11 +263,7 @@ def _databricks_auth_describe(
     target: str | None = None,
 ) -> _DatabricksAuthDescription:
     if host and not profile:
-        auth_profile: _DatabricksAuthProfile
-        for auth_profile in _databricks_auth_profiles()["profiles"]:
-            if auth_profile.get("host") == host:
-                profile = auth_profile.get("name")
-                break
+        profile = _get_host_profile(host)
     databricks: str = which_databricks()
     output: str
     if host or profile or target:
@@ -272,7 +279,6 @@ def _databricks_auth_describe(
                 *(("--target", target) if target else ()),
             ),
             input=b"\n\n",
-            echo=True,
         )
     else:
         # Automatically select the default/first profile if no host,
@@ -295,11 +301,7 @@ def _databricks_auth_login(
     target: str | None = None,
 ) -> None:
     if host and not profile:
-        auth_profile: _DatabricksAuthProfile
-        for auth_profile in _databricks_auth_profiles()["profiles"]:
-            if auth_profile.get("host") == host:
-                profile = auth_profile.get("name")
-                break
+        profile = _get_host_profile(host)
     databricks: str = which_databricks()
     if host or profile or target:
         check_call(
