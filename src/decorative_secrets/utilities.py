@@ -285,15 +285,20 @@ def warn_retry_hook(
 
 
 def create_log_warning_retry_hook(
-    logger: logging.Logger,
+    logger: logging.Logger | Callable[[], logging.Logger],
 ) -> RetryHook:
     """
     This factory creates a retry hook which logs warning using the provided
     logger.
 
     Parameters:
-        logger: The logger to use for logging warnings.
+        logger: The logger to use for logging warnings, or a callable which
+        returns a logger.
     """
+    if not isinstance(logger, logging.Logger) and callable(logger):
+        logger = logger()
+    if not isinstance(logger, logging.Logger):
+        raise TypeError(logger)
 
     def retry_hook(
         error: Exception,
