@@ -371,7 +371,7 @@ def retry(  # noqa: C901
             @wraps(function)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 nonlocal attempt_number
-                if number_of_attempts - attempt_number:
+                if (number_of_attempts - attempt_number) > 0:
                     # If `number_of_attempts` is greater than `attempt_number`,
                     # we have remaining attempts to try, so catch errors.
                     try:
@@ -412,7 +412,7 @@ def retry(  # noqa: C901
             @wraps(function)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 nonlocal attempt_number
-                if number_of_attempts - attempt_number:
+                if (number_of_attempts - attempt_number) > 0:
                     try:
                         return function(*args, **kwargs)
                     except errors as error:
