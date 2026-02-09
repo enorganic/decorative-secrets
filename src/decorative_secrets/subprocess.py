@@ -36,6 +36,7 @@ def check_output(
     cwd: str | Path | None = None,
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
+    suppress_stderr: bool = True,
     echo: bool = False,
 ) -> bytes: ...
 
@@ -48,17 +49,19 @@ def check_output(
     cwd: str | Path | None = None,
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
+    suppress_stderr: bool = True,
     echo: bool = False,
 ) -> bytes: ...
 
 
-def check_output(
+def check_output(  # noqa: C901
     args: tuple[str, ...],
     *,
     text: bool | None = True,
     cwd: str | Path | None = None,
     input: str | bytes | None = None,  # noqa: A002
     env: Mapping[str, str] | None = None,
+    suppress_stderr: bool = True,
     echo: bool = False,
 ) -> str | bytes | None:
     """
@@ -74,6 +77,8 @@ def check_output(
         input: Input to send to the command
         env: Environment variables to set for the command
         echo: Whether to print the command and its output (default: False)
+        suppress_stderr: Whether to prevent stderr from being printed to the
+            console
     """
     if echo:
         if cwd:
@@ -83,21 +88,33 @@ def check_output(
     if isinstance(input, bytes) and text:
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
 
-    with TemporaryFile("w+") as stderr:
-        try:
-            completed_process: CompletedProcess = run(
-                args,
-                stdout=PIPE,
-                stderr=stderr,  # DEVNULL,
-                check=True,
-                cwd=cwd or None,
-                input=input,
-                env=env,
-                text=text,
-            )
-        except CalledProcessError as error:
-            error.stderr = StringIO(stderr.read())
-            raise
+    completed_process: CompletedProcess
+    if suppress_stderr:
+        with TemporaryFile("w+") as stderr:
+            try:
+                completed_process = run(
+                    args,
+                    stdout=PIPE,
+                    stderr=stderr,  # DEVNULL,
+                    check=True,
+                    cwd=cwd or None,
+                    input=input,
+                    env=env,
+                    text=text,
+                )
+            except CalledProcessError as error:
+                error.stderr = StringIO(stderr.read())
+                raise
+    else:
+        completed_process = run(
+            args,
+            capture_output=True,
+            check=True,
+            cwd=cwd or None,
+            input=input,
+            env=env,
+            text=text,
+        )
     output: str | bytes | None = None
     if text is None:
         pass
@@ -120,6 +137,7 @@ def check_call(
     cwd: str | Path | None = None,
     input: str | bytes | None = None,  # noqa: A002
     env: Mapping[str, str] | None = None,
+    suppress_stderr: bool = True,
     echo: bool = False,
 ) -> None:
     """
@@ -135,6 +153,8 @@ def check_call(
         input: Input to send to the command
         env: Environment variables to set for the command
         echo: Whether to print the command and its output (default: False)
+        suppress_stderr: Whether to prevent stderr from being printed to the
+            console
     """
     check_output(
         args,
@@ -142,5 +162,6 @@ def check_call(
         cwd=cwd,
         input=input,
         env=env,
+        suppress_stderr=suppress_stderr,
         echo=echo,
     )
