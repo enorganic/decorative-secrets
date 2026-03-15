@@ -350,6 +350,62 @@ def databricks_auth_login(
 
 
 @cache
+@retry(
+    (CalledProcessError,),
+    number_of_attempts=3,
+)
+def _get_databricks_auth_token(
+    host: str | None = None,
+    profile: str | None = None,
+    target: str | None = None,
+) -> None:
+    if host and not profile:
+        profile = _get_host_profile(host)
+    databricks: str = which_databricks()
+    if host or profile or target:
+        return json.loads(
+            check_output(
+                (
+                    databricks,
+                    "auth",
+                    "token",
+                    *(("--host", host) if host else ()),
+                    *(("--profile", profile) if profile else ()),
+                    *(("--target", target) if target else ()),
+                ),
+                input=b"\n\n",
+            )
+        ).get("access_token")
+    # Automatically select the default/first profile if no host,
+    # profile, or target is specified
+    return json.loads(
+        check_output((databricks, "auth", "token"), input=b"\n\n")
+    ).get("access_token")
+
+
+def get_databricks_auth_token(
+    host: str | None = None,
+    profile: str | None = None,
+    target: str | None = None,
+) -> str | None:
+    """
+    Get a Databricks authentication token using the CLI.
+
+    Parameters:
+        host: A Databricks workspace host URL.
+        profile: A Databricks Configuration Profile.
+        target: A Databricks CLI target.
+    """
+    if (host is None) and (profile is None) and (target is None):
+        host = os.getenv("DATABRICKS_HOST")
+        profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
+    databricks_auth_login(host=host, profile=profile, target=target)
+    return _get_databricks_auth_token(
+        host=host, profile=profile, target=target
+    )
+
+
+@cache
 def _get_env_databricks_workspace_client(
     host: str | None = None,
     account_id: str | None = None,
@@ -372,8 +428,8 @@ def _get_env_databricks_workspace_client(
     debug_truncate_bytes: int | None = None,
     *,
     debug_headers: bool | None = None,
-    product: str = "unknown",
-    product_version: str = "0.0.0",
+    product: str | None = None,
+    product_version: str | None = None,
     credentials_strategy: CredentialsStrategy | None = None,
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
@@ -390,15 +446,18 @@ def _get_env_databricks_workspace_client(
         host = host or config.host
         profile = profile or config.profile
     if not (
-        (
-            client_id
-            or os.getenv("DATABRICKS_CLIENT_ID")
-            or (config and config.client_id)
-        )
-        and (
-            client_secret
-            or os.getenv("DATABRICKS_CLIENT_SECRET")
-            or (config and config.client_secret)
+        token
+        or (
+            (
+                client_id
+                or os.getenv("DATABRICKS_CLIENT_ID")
+                or (config and config.client_id)
+            )
+            and (
+                client_secret
+                or os.getenv("DATABRICKS_CLIENT_SECRET")
+                or (config and config.client_secret)
+            )
         )
     ):
         with suppress(
@@ -456,6 +515,7 @@ def _get_env_databricks_workspace_client(
                 )
                 if parameter_name
                 in inspect.signature(WorkspaceClient.__init__).parameters
+                and (argument is not None)
             }
         )
     finally:
@@ -487,8 +547,8 @@ def get_databricks_workspace_client(
     debug_truncate_bytes: int | None = None,
     *,
     debug_headers: bool | None = None,
-    product: str = "unknown",
-    product_version: str = "0.0.0",
+    product: str | None = None,
+    product_version: str | None = None,
     credentials_strategy: CredentialsStrategy | None = None,
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
