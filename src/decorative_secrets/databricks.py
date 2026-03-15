@@ -15,10 +15,6 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.credentials_provider import DatabricksCliTokenSource
-from databricks.sdk.mixins.files import FilesExt
-from databricks.sdk.oauth import Token, TokenSource
-from databricks.sdk.service.serving import ServingEndpointsDataPlaneAPI
 
 from decorative_secrets._utilities import (
     which_brew,
@@ -32,107 +28,53 @@ from decorative_secrets.errors import (
 from decorative_secrets.subprocess import check_call, check_output
 from decorative_secrets.utilities import retry
 
-try:
-    from databricks.sdk.dbutils import RemoteDbUtils
-except ImportError:
-    RemoteDbUtils = None  # type: ignore[assignment,misc]
-
-try:
-    from databricks.sdk.data_plane import DataPlaneTokenSource
-except ImportError:
-    DataPlaneTokenSource = None  # type: ignore[assignment,misc]
-
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
+    from databricks.sdk.dbutils import RemoteDbUtils
     from databricks.sdk.oauth import AuthorizationDetail
 
 
-# region Make workspace clients pickleable
+# region Make workspace clients pickleable (in most scenarios)
 
 
-class _UnpickledTokenSource(TokenSource):
-    """
-    An token source for use in pickled/un-pickled workspace clients.
-    """
-
-    def __init__(self, token: Token) -> None:
-        self._token: Token = token
-
-    def token(self) -> Token:
-        return self._token
-
-
-def _databricks_cli_token_source_redux(
-    source: DatabricksCliTokenSource,
-) -> tuple[Callable[..., _UnpickledTokenSource], tuple[Token]]:
-    return (_UnpickledTokenSource, (source.token(),))
-
-
-copyreg.pickle(
-    DatabricksCliTokenSource,
-    _databricks_cli_token_source_redux,  # type: ignore[arg-type]
-)
-
-
-if RemoteDbUtils is not None:
-
-    def _remote_dbutils_redux(
-        _: RemoteDbUtils,
-    ) -> tuple[Callable[..., RemoteDbUtils], tuple]:
-        return (get_dbutils, ())
-
-    copyreg.pickle(
-        RemoteDbUtils,
-        _remote_dbutils_redux,  # type: ignore[arg-type]
+def _unpickle_workspace_client(
+    host: str,
+    client_id: str | None,
+    client_secret: str | None,
+    token: str | None,
+) -> WorkspaceClient:
+    return WorkspaceClient(
+        host=host,
+        client_id=client_id,
+        client_secret=client_secret,
+        token=token,
     )
 
 
-def _files_ext_redux(
-    files_ext: FilesExt,
-) -> tuple[Callable[..., FilesExt], tuple[Any, Any]]:
-    return (FilesExt, (files_ext._api, files_ext._config))  # noqa: SLF001
-
-
-copyreg.pickle(FilesExt, _files_ext_redux)
-
-
-def _serving_endpoints_data_plane_api_redux(
-    serving_endpoints_data_plane_api: ServingEndpointsDataPlaneAPI,
-) -> tuple[Callable[..., ServingEndpointsDataPlaneAPI], tuple[Any, Any, Any]]:
+def _workspace_client_redux(
+    client: WorkspaceClient,
+) -> tuple[Callable[..., WorkspaceClient], tuple]:
+    token: str | None = None
+    with suppress(ValueError, AttributeError):
+        token = client.config.oauth_token().access_token
     return (
-        ServingEndpointsDataPlaneAPI,
+        _unpickle_workspace_client,
         (
-            serving_endpoints_data_plane_api._api,  # noqa: SLF001
-            (serving_endpoints_data_plane_api)._control_plane_service,  # noqa: SLF001
-            serving_endpoints_data_plane_api._dpts,  # noqa: SLF001
+            client.config.host,
+            client.config.client_id,
+            client.config.client_secret,
+            token,
         ),
     )
 
 
 copyreg.pickle(
-    ServingEndpointsDataPlaneAPI, _serving_endpoints_data_plane_api_redux
+    WorkspaceClient,
+    _workspace_client_redux,
 )
-
-
-if DataPlaneTokenSource is not None:
-
-    def _data_plane_token_source_redux(
-        data_plane_token_source: DataPlaneTokenSource,
-    ) -> tuple[Callable[..., DataPlaneTokenSource], tuple[Any, Any, Any]]:
-        return (
-            DataPlaneTokenSource,
-            (
-                data_plane_token_source._token_exchange_host,  # noqa: SLF001
-                (data_plane_token_source)._cpts,  # noqa: SLF001
-                data_plane_token_source._disable_async,  # noqa: SLF001
-            ),
-        )
-
-    copyreg.pickle(DataPlaneTokenSource, _data_plane_token_source_redux)
 
 # endregion
 
@@ -164,8 +106,8 @@ class DatabricksWorkspaceClientArguments:
     google_service_account: str | None = None
     debug_truncate_bytes: int | None = None
     debug_headers: bool | None = None
-    product: str = "unknown"
-    product_version: str = "0.0.0"
+    product: str | None = None
+    product_version: str | None = None
     credentials_strategy: CredentialsStrategy | None = None
     credentials_provider: CredentialsStrategy | None = None
     token_audience: str | None = None
@@ -448,62 +390,6 @@ def databricks_auth_login(
     ):
         return
     return _databricks_auth_login(host=host, profile=profile, target=target)
-
-
-@cache
-@retry(
-    (CalledProcessError,),
-    number_of_attempts=3,
-)
-def _get_databricks_auth_token(
-    host: str | None = None,
-    profile: str | None = None,
-    target: str | None = None,
-) -> None:
-    if host and not profile:
-        profile = _get_host_profile(host)
-    databricks: str = which_databricks()
-    if host or profile or target:
-        return json.loads(
-            check_output(
-                (
-                    databricks,
-                    "auth",
-                    "token",
-                    *(("--host", host) if host else ()),
-                    *(("--profile", profile) if profile else ()),
-                    *(("--target", target) if target else ()),
-                ),
-                input=b"\n\n",
-            )
-        ).get("access_token")
-    # Automatically select the default/first profile if no host,
-    # profile, or target is specified
-    return json.loads(
-        check_output((databricks, "auth", "token"), input=b"\n\n")
-    ).get("access_token")
-
-
-def get_databricks_auth_token(
-    host: str | None = None,
-    profile: str | None = None,
-    target: str | None = None,
-) -> str | None:
-    """
-    Get a Databricks authentication token using the CLI.
-
-    Parameters:
-        host: A Databricks workspace host URL.
-        profile: A Databricks Configuration Profile.
-        target: A Databricks CLI target.
-    """
-    if (host is None) and (profile is None) and (target is None):
-        host = os.getenv("DATABRICKS_HOST")
-        profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
-    databricks_auth_login(host=host, profile=profile, target=target)
-    return _get_databricks_auth_token(
-        host=host, profile=profile, target=target
-    )
 
 
 @cache
