@@ -16,7 +16,6 @@ from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.credentials_provider import DatabricksCliTokenSource
-from databricks.sdk.data_plane import DataPlaneTokenSource
 from databricks.sdk.mixins.files import FilesExt
 from databricks.sdk.oauth import Token, TokenSource
 from databricks.sdk.service.serving import ServingEndpointsDataPlaneAPI
@@ -37,6 +36,11 @@ try:
     from databricks.sdk.dbutils import RemoteDbUtils
 except ImportError:
     RemoteDbUtils = None  # type: ignore[assignment,misc]
+
+try:
+    from databricks.sdk.data_plane import DataPlaneTokenSource
+except ImportError:
+    DataPlaneTokenSource = None  # type: ignore[assignment,misc]
 
 
 if TYPE_CHECKING:
@@ -114,20 +118,21 @@ copyreg.pickle(
 )
 
 
-def _data_plane_token_source_redux(
-    data_plane_token_source: DataPlaneTokenSource,
-) -> tuple[Callable[..., DataPlaneTokenSource], tuple[Any, Any, Any]]:
-    return (
-        DataPlaneTokenSource,
-        (
-            data_plane_token_source._token_exchange_host,  # noqa: SLF001
-            (data_plane_token_source)._cpts,  # noqa: SLF001
-            data_plane_token_source._disable_async,  # noqa: SLF001
-        ),
-    )
+if DataPlaneTokenSource is not None:
 
+    def _data_plane_token_source_redux(
+        data_plane_token_source: DataPlaneTokenSource,
+    ) -> tuple[Callable[..., DataPlaneTokenSource], tuple[Any, Any, Any]]:
+        return (
+            DataPlaneTokenSource,
+            (
+                data_plane_token_source._token_exchange_host,  # noqa: SLF001
+                (data_plane_token_source)._cpts,  # noqa: SLF001
+                data_plane_token_source._disable_async,  # noqa: SLF001
+            ),
+        )
 
-copyreg.pickle(DataPlaneTokenSource, _data_plane_token_source_redux)
+    copyreg.pickle(DataPlaneTokenSource, _data_plane_token_source_redux)
 
 # endregion
 

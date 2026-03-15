@@ -2,7 +2,6 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
@@ -22,6 +21,7 @@ from decorative_secrets.utilities import get_exception_text
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from databricks.sdk import WorkspaceClient
     from databricks.sdk.service.iam import User
 
 
