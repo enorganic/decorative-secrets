@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copyreg
 import inspect
 import json
 import os
@@ -14,6 +15,11 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.credentials_provider import DatabricksCliTokenSource
+from databricks.sdk.data_plane import DataPlaneTokenSource
+from databricks.sdk.mixins.files import FilesExt
+from databricks.sdk.oauth import Token, TokenSource
+from databricks.sdk.service.serving import ServingEndpointsDataPlaneAPI
 
 from decorative_secrets._utilities import (
     which_brew,
@@ -27,13 +33,103 @@ from decorative_secrets.errors import (
 from decorative_secrets.subprocess import check_call, check_output
 from decorative_secrets.utilities import retry
 
+try:
+    from databricks.sdk.dbutils import RemoteDbUtils
+except ImportError:
+    RemoteDbUtils = None  # type: ignore[assignment,misc]
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
-    from databricks.sdk.dbutils import RemoteDbUtils
     from databricks.sdk.oauth import AuthorizationDetail
+
+
+# region Make workspace clients pickleable
+
+
+class _UnpickledTokenSource(TokenSource):
+    """
+    An token source for use in pickled/un-pickled workspace clients.
+    """
+
+    def __init__(self, token: Token) -> None:
+        self._token: Token = token
+
+    def token(self) -> Token:
+        return self._token
+
+
+def _databricks_cli_token_source_redux(
+    source: DatabricksCliTokenSource,
+) -> tuple[Callable[..., _UnpickledTokenSource], tuple[Token]]:
+    return (_UnpickledTokenSource, (source.token(),))
+
+
+copyreg.pickle(
+    DatabricksCliTokenSource,
+    _databricks_cli_token_source_redux,  # type: ignore[arg-type]
+)
+
+
+if RemoteDbUtils is not None:
+
+    def _remote_dbutils_redux(
+        _: RemoteDbUtils,
+    ) -> tuple[Callable[..., RemoteDbUtils], tuple]:
+        return (get_dbutils, ())
+
+    copyreg.pickle(
+        RemoteDbUtils,
+        _remote_dbutils_redux,  # type: ignore[arg-type]
+    )
+
+
+def _files_ext_redux(
+    files_ext: FilesExt,
+) -> tuple[Callable[..., FilesExt], tuple[Any, Any]]:
+    return (FilesExt, (files_ext._api, files_ext._config))  # noqa: SLF001
+
+
+copyreg.pickle(FilesExt, _files_ext_redux)
+
+
+def _serving_endpoints_data_plane_api_redux(
+    serving_endpoints_data_plane_api: ServingEndpointsDataPlaneAPI,
+) -> tuple[Callable[..., ServingEndpointsDataPlaneAPI], tuple[Any, Any, Any]]:
+    return (
+        ServingEndpointsDataPlaneAPI,
+        (
+            serving_endpoints_data_plane_api._api,  # noqa: SLF001
+            (serving_endpoints_data_plane_api)._control_plane_service,  # noqa: SLF001
+            serving_endpoints_data_plane_api._dpts,  # noqa: SLF001
+        ),
+    )
+
+
+copyreg.pickle(
+    ServingEndpointsDataPlaneAPI, _serving_endpoints_data_plane_api_redux
+)
+
+
+def _data_plane_token_source_redux(
+    data_plane_token_source: DataPlaneTokenSource,
+) -> tuple[Callable[..., DataPlaneTokenSource], tuple[Any, Any, Any]]:
+    return (
+        DataPlaneTokenSource,
+        (
+            data_plane_token_source._token_exchange_host,  # noqa: SLF001
+            (data_plane_token_source)._cpts,  # noqa: SLF001
+            data_plane_token_source._disable_async,  # noqa: SLF001
+        ),
+    )
+
+
+copyreg.pickle(DataPlaneTokenSource, _data_plane_token_source_redux)
+
+# endregion
 
 
 @dataclass

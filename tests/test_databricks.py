@@ -2,10 +2,12 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
+from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 from onepassword.errors import (  # type: ignore[import-untyped]
     RateLimitExceededException,
 )
+from pyspark import cloudpickle
 
 from decorative_secrets.databricks import (
     _install_databricks_cli,
@@ -18,6 +20,8 @@ from decorative_secrets.utilities import get_exception_text
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from databricks.sdk.service.iam import User
 
 
 def test_install_sh_databricks_cli() -> None:
@@ -119,6 +123,14 @@ def test_apply_databricks_secret_arguments(
 )
 def test_get_databricks_auth_token() -> None:
     assert get_databricks_auth_token() is not None
+
+
+def test_pickle_workspace_client() -> None:
+    client: WorkspaceClient = WorkspaceClient()
+    me: User = client.current_user.me()
+    pickled_client: bytes = cloudpickle.dumps(client)
+    unpickled_client: WorkspaceClient = cloudpickle.loads(pickled_client)
+    assert unpickled_client.current_user.me() == me
 
 
 if __name__ == "__main__":
