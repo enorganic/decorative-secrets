@@ -15,6 +15,7 @@ from decorative_secrets.databricks import (
     apply_databricks_secrets_arguments,
     get_databricks_auth_token,
     get_databricks_secret,
+    get_databricks_workspace_client,
 )
 from decorative_secrets.utilities import get_exception_text
 
@@ -126,7 +127,7 @@ def test_get_databricks_auth_token() -> None:
 
 
 def test_pickle_workspace_client() -> None:
-    client: WorkspaceClient = WorkspaceClient()
+    client: WorkspaceClient = get_databricks_workspace_client()
     me: User = client.current_user.me()
     pickled_client: bytes = cloudpickle.dumps(client)
     unpickled_client: WorkspaceClient = cloudpickle.loads(pickled_client)
