@@ -11,6 +11,7 @@ from decorative_secrets.databricks import (
     _install_databricks_cli,
     _install_sh_databricks_cli,
     apply_databricks_secrets_arguments,
+    get_databricks_auth_token,
     get_databricks_secret,
 )
 from decorative_secrets.utilities import get_exception_text
@@ -110,6 +111,10 @@ def test_apply_databricks_secret_arguments(
     finally:
         os.environ.clear()
         os.environ.update(env)
+
+
+def test_get_databricks_auth_token() -> None:
+    assert get_databricks_auth_token() is not None
 
 
 if __name__ == "__main__":
