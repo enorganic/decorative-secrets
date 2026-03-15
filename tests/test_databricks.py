@@ -12,7 +12,6 @@ from decorative_secrets.databricks import (
     _install_databricks_cli,
     _install_sh_databricks_cli,
     apply_databricks_secrets_arguments,
-    get_databricks_auth_token,
     get_databricks_secret,
     get_databricks_workspace_client,
 )
@@ -116,14 +115,6 @@ def test_apply_databricks_secret_arguments(
     finally:
         os.environ.clear()
         os.environ.update(env)
-
-
-@pytest.mark.skipif(
-    bool(os.getenv("CI")),
-    reason="`get_databricks_auth_token` function is for local use only",
-)
-def test_get_databricks_auth_token() -> None:
-    assert get_databricks_auth_token() is not None
 
 
 def test_pickle_workspace_client() -> None:
