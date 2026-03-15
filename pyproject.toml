@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.12.1"
+version = "0.12.2"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -84,6 +84,7 @@ dependencies = [
     "dependence",
     "hatch",
     "python-dotenv",
+    "pyspark",
 ]
 pre-install-commands = [
     "uv pip install --upgrade pip",
@@ -118,6 +119,7 @@ extra-args = [
 ]
 extra-dependencies = [
     "dependence",
+    "pyspark",
 ]
 features = [
     "all",
