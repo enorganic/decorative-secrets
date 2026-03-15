@@ -46,10 +46,14 @@ def _unpickle_workspace_client(
     client_secret: str | None,
     token: str | None,
 ) -> WorkspaceClient:
+    if client_id and client_secret:
+        return WorkspaceClient(
+            host=host,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
     return WorkspaceClient(
         host=host,
-        client_id=client_id,
-        client_secret=client_secret,
         token=token,
     )
 
