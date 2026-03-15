@@ -113,6 +113,10 @@ def test_apply_databricks_secret_arguments(
         os.environ.update(env)
 
 
+@pytest.mark.skipif(
+    bool(os.getenv("CI")),
+    reason="`get_databricks_auth_token` function is for local use only",
+)
 def test_get_databricks_auth_token() -> None:
     assert get_databricks_auth_token() is not None
 
