@@ -309,6 +309,9 @@ def _databricks_auth_describe(
     profile: str | None = None,
     target: str | None = None,
 ) -> _DatabricksAuthDescription:
+    if (host is None) and (profile is None) and (target is None):
+        host = os.getenv("DATABRICKS_HOST")
+        profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
     if host and not profile:
         profile = _get_host_profile(host)
     databricks: str = which_databricks()
@@ -347,6 +350,9 @@ def _databricks_auth_login(
     profile: str | None = None,
     target: str | None = None,
 ) -> None:
+    if (host is None) and (profile is None) and (target is None):
+        host = os.getenv("DATABRICKS_HOST")
+        profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
     if host and not profile:
         profile = _get_host_profile(host)
     databricks: str = which_databricks()
