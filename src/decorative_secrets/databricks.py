@@ -386,13 +386,14 @@ def databricks_auth_login(
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
     # with suppress(CalledProcessError):
     # If we are already authenticated, don't attempt to log in again
-    if (
-        _databricks_auth_describe(
-            host=host, profile=profile, target=target
-        ).get("status")
-        == "success"
-    ):
-        return
+    with suppress(CalledProcessError):
+        if (
+            _databricks_auth_describe(
+                host=host, profile=profile, target=target
+            ).get("status")
+            == "success"
+        ):
+            return
     return _databricks_auth_login(host=host, profile=profile, target=target)
 
 
