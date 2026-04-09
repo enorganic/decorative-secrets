@@ -50,7 +50,7 @@ def test_check_output() -> None:
             temp_stderr.seek(0)
             if temp_stderr.read():
                 pytest.raises(AssertionError)
-            if not error.stderr.read():
+            if not error.stderr:
                 pytest.raises(AssertionError)
         finally:
             sys.stderr = stderr
