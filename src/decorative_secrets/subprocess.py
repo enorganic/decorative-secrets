@@ -1,67 +1,95 @@
 from __future__ import annotations
 
-from io import StringIO
 from subprocess import (
     PIPE,
     CalledProcessError,
     CompletedProcess,
-    list2cmdline,
     run,
+)
+from subprocess import (
+    list2cmdline as _list2cmdline,
 )
 from tempfile import TemporaryFile
 from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
+
+
+def get_default_shell() -> str | None:
+    return None  # os.getenv("SHELL") or os.getenv("COMSPEC")
+
+
+def list2cmdline(args: Iterable[str], shell: str | None = None) -> str:
+    """
+    This function is a wrapper around `subprocess.list2cmdline` which ensures
+    that arguments containing `[` are properly quoted, making it safe to
+    use with `zsh`.
+    """
+    shell_: str | None = shell or get_default_shell()
+    if (not shell_) or (not shell_.lower().endswith("zsh")):
+        return _list2cmdline(args)
+    return _list2cmdline(
+        (
+            f"'{arg}'"
+            if "[" in arg and not (arg.startswith("'") and arg.endswith("'"))
+            else arg
+        )
+        for arg in args
+    )
 
 
 @overload
 def check_output(
-    args: tuple[str, ...],
+    args: tuple[str, ...] | str,
     *,
     text: Literal[True] = True,
     cwd: str | Path | None = None,
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
+    shell: bool = False,
     echo: bool = False,
 ) -> str: ...
 
 
 @overload
 def check_output(
-    args: tuple[str, ...],
+    args: tuple[str, ...] | str,
     *,
     text: Literal[False] = False,
     cwd: str | Path | None = None,
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
+    shell: bool = False,
     echo: bool = False,
 ) -> bytes: ...
 
 
 @overload
 def check_output(
-    args: tuple[str, ...],
+    args: tuple[str, ...] | str,
     *,
     text: None = None,
     cwd: str | Path | None = None,
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
+    shell: bool = False,
     echo: bool = False,
 ) -> bytes: ...
 
 
 def check_output(  # noqa: C901
-    args: tuple[str, ...],
+    args: tuple[str, ...] | str,
     *,
     text: bool | None = True,
     cwd: str | Path | None = None,
     input: str | bytes | None = None,  # noqa: A002
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
+    shell: bool = False,
     echo: bool = False,
 ) -> str | bytes | None:
     """
@@ -80,6 +108,22 @@ def check_output(  # noqa: C901
         suppress_stderr: Whether to prevent stderr from being printed to the
             console
     """
+    default_shell: str | None = get_default_shell() if shell else None
+    args_: tuple[str, ...] | str = (
+        args
+        if isinstance(args, str)
+        else list2cmdline(args)
+        if (shell and not default_shell)
+        else (default_shell, list2cmdline(args))
+        if default_shell
+        and default_shell.endswith(("pwsh.exe", "powershell.exe"))
+        else (default_shell, "/c", list2cmdline(args))
+        if default_shell and default_shell.endswith("cmd.exe")
+        else (default_shell, "-i", "-c", list2cmdline(args))
+        if default_shell
+        else args
+    )
+    shell_: bool = shell and ((not default_shell) or (isinstance(args, str)))
     if echo:
         if cwd:
             print("$", "cd", cwd, "&&", list2cmdline(args))  # noqa: T201
@@ -87,13 +131,12 @@ def check_output(  # noqa: C901
             print("$", list2cmdline(args))  # noqa: T201
     if isinstance(input, bytes) and text:
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
-
     completed_process: CompletedProcess
     if suppress_stderr:
         with TemporaryFile("w+") as stderr:
             try:
                 completed_process = run(
-                    args,
+                    args_,
                     stdout=PIPE,
                     stderr=stderr,  # DEVNULL,
                     check=True,
@@ -101,19 +144,22 @@ def check_output(  # noqa: C901
                     input=input,
                     env=env,
                     text=text,
+                    shell=shell_,
                 )
             except CalledProcessError as error:
-                error.stderr = StringIO(stderr.read())
+                stderr.seek(0)
+                error.stderr = stderr.read().encode("utf-8", errors="ignore")
                 raise
     else:
         completed_process = run(
-            args,
+            args_,
             capture_output=True,
             check=True,
             cwd=cwd or None,
             input=input,
             env=env,
             text=text,
+            shell=shell_,
         )
     output: str | bytes | None = None
     if text is None:
@@ -132,12 +178,13 @@ def check_output(  # noqa: C901
 
 
 def check_call(
-    args: tuple[str, ...],
+    args: tuple[str, ...] | str,
     *,
     cwd: str | Path | None = None,
     input: str | bytes | None = None,  # noqa: A002
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
+    shell: bool = False,
     echo: bool = False,
 ) -> None:
     """
@@ -153,6 +200,7 @@ def check_call(
         input: Input to send to the command
         env: Environment variables to set for the command
         echo: Whether to print the command and its output (default: False)
+        shell: Whether to run the command in a shell
         suppress_stderr: Whether to prevent stderr from being printed to the
             console
     """
@@ -163,5 +211,6 @@ def check_call(
         input=input,
         env=env,
         suppress_stderr=suppress_stderr,
+        shell=shell,
         echo=echo,
     )

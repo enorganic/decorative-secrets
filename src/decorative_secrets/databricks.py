@@ -283,6 +283,7 @@ class _DatabricksAuthDescription(TypedDict, total=False):
     error: dict[str, Any]
 
 
+@cache
 def _get_host_profile(
     host: str,
 ) -> str | None:
@@ -294,6 +295,7 @@ def _get_host_profile(
     return None
 
 
+@cache
 def _databricks_auth_profiles() -> _DatabricksAuthProfiles:
     databricks: str = which_databricks()
     return json.loads(
@@ -340,6 +342,46 @@ def _databricks_auth_describe(
     return json.loads(output)
 
 
+def _databricks_bundle_summary(
+    target: str,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    databricks: str = which_databricks()
+    output: str = check_output(
+        (
+            databricks,
+            "bundle",
+            "summary",
+            "-t",
+            target,
+            "-o",
+            "json",
+            *(("-p", profile) if profile else ()),
+        ),
+        input=b"\n\n",
+    )
+    return json.loads(output)
+
+
+def _databricks_auth_login_target(target: str, **env: Any) -> None:
+    lowercase_target: str | None = target.lower() if target else None
+    profile: _DatabricksAuthProfile
+    for profile in sorted(
+        _databricks_auth_profiles()["profiles"],
+        key=lambda profile: (
+            0 if profile.get("name", "").lower() == lowercase_target else 1
+        ),
+    ):
+        host: str | None = profile.get("host")
+        name: str | None = profile.get("name")
+        if not host:
+            continue
+        with suppress(CalledProcessError):
+            _databricks_auth_login(host=host, profile=name, **env)
+            _databricks_bundle_summary(target=target, profile=name)
+            return
+
+
 @cache
 @retry(
     (CalledProcessError,),
@@ -349,6 +391,7 @@ def _databricks_auth_login(
     host: str | None = None,
     profile: str | None = None,
     target: str | None = None,
+    **env: Any,
 ) -> None:
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
@@ -357,17 +400,35 @@ def _databricks_auth_login(
         profile = _get_host_profile(host)
     databricks: str = which_databricks()
     if host or profile or target:
-        check_call(
-            (
-                databricks,
-                "auth",
-                "login",
-                *(("--host", host) if host else ()),
-                *(("--profile", profile) if profile else ()),
-                *(("--target", target) if target else ()),
-            ),
-            input=b"\n\n",
-        )
+        try:
+            check_call(
+                (
+                    databricks,
+                    "auth",
+                    "login",
+                    *(("--host", host) if host else ()),
+                    *(("--profile", profile) if profile else ()),
+                    *(("--target", target) if target else ()),
+                ),
+                input=b"\n\n",
+            )
+        except CalledProcessError as error:
+            if target:
+                error_message: str = error.stderr.decode()
+                if "https://" not in error_message:
+                    _databricks_auth_login_target(target=target)
+                    return
+                # If any of the profile hosts are mentioned in the
+                # error message, attempts to authenticate using that
+                # profile
+                profile_: _DatabricksAuthProfile
+                for profile_ in _databricks_auth_profiles()["profiles"]:
+                    host_: str | None = profile_.get("host")
+                    if host_ and (host_ in error_message):
+                        name: str | None = profile_.get("name")
+                        _databricks_auth_login(profile=name, host=host_, **env)
+                        return
+            raise
     else:
         # Automatically select the default/first profile if no host,
         # profile, or target is specified
@@ -394,12 +455,16 @@ def databricks_auth_login(
     # If we are already authenticated, don't attempt to log in again
     if (
         _databricks_auth_describe(
-            host=host, profile=profile, target=target
+            host=host,
+            profile=profile,
+            target=target,
         ).get("status")
         == "success"
     ):
         return
-    return _databricks_auth_login(host=host, profile=profile, target=target)
+    return _databricks_auth_login(
+        host=host, profile=profile, target=target, **os.environ
+    )
 
 
 @cache
