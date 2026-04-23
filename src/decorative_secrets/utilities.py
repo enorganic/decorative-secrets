@@ -370,13 +370,12 @@ def retry(  # noqa: C901
     """
 
     def decorating_function(function: Callable) -> Callable:
-        attempt_number: int = 1
         if iscoroutinefunction(function):
 
             @wraps(function)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
-                nonlocal attempt_number
-                if (number_of_attempts - attempt_number) > 0:
+                __attempt_number: int = kwargs.pop("__attempt_number", 1)
+                if (number_of_attempts - __attempt_number) > 0:
                     # If `number_of_attempts` is greater than `attempt_number`,
                     # we have remaining attempts to try, so catch errors.
                     try:
@@ -385,7 +384,7 @@ def retry(  # noqa: C901
                         if not (
                             (
                                 await retry_hook(  # type: ignore[misc]
-                                    error, attempt_number
+                                    error, __attempt_number
                                 )
                                 if len(
                                     inspect.signature(retry_hook).parameters
@@ -397,7 +396,7 @@ def retry(  # noqa: C901
                             )
                             if iscoroutinefunction(retry_hook)
                             else (
-                                retry_hook(error, attempt_number)
+                                retry_hook(error, __attempt_number)
                                 if len(
                                     inspect.signature(retry_hook).parameters
                                 )
@@ -406,9 +405,11 @@ def retry(  # noqa: C901
                             )
                         ):
                             raise
-                        await asyncio.sleep(2**attempt_number)
-                        attempt_number += 1
-                        return await wrapper(*args, **kwargs)
+                        await asyncio.sleep(2**__attempt_number)
+                        __attempt_number += 1
+                        return await wrapper(
+                            *args, __attempt_number=__attempt_number, **kwargs
+                        )
                 # This is our last attempt, so just call the function.
                 return await function(*args, **kwargs)
 
@@ -416,21 +417,23 @@ def retry(  # noqa: C901
 
             @wraps(function)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
-                nonlocal attempt_number
-                if (number_of_attempts - attempt_number) > 0:
+                __attempt_number: int = kwargs.pop("__attempt_number", 1)
+                if (number_of_attempts - __attempt_number) > 0:
                     try:
                         return function(*args, **kwargs)
                     except errors as error:
                         if not (
-                            retry_hook(error, attempt_number)
+                            retry_hook(error, __attempt_number)
                             if len(inspect.signature(retry_hook).parameters)
                             > 1
                             else retry_hook(error)
                         ):
                             raise
-                        sleep(2**attempt_number)
-                        attempt_number += 1
-                        return wrapper(*args, **kwargs)
+                        sleep(2**__attempt_number)
+                        __attempt_number += 1
+                        return wrapper(
+                            *args, __attempt_number=__attempt_number, **kwargs
+                        )
                 return function(*args, **kwargs)
 
         return wrapper
