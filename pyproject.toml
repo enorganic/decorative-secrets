@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.12.14"
+version = "0.12.15"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -38,7 +38,7 @@ google = [
     "google-cloud-secret-manager~=2.27",
 ]
 azure = [
-    "azure-keyvault-secrets~=4.10",
+    "azure-keyvault-secrets~=4.11",
 ]
 all = [
     "databricks-sdk",
@@ -46,7 +46,7 @@ all = [
     "onepassword-sdk~=0.4",
     "onepasswordconnectsdk~=2.0",
     "google-cloud-secret-manager~=2.27",
-    "azure-keyvault-secrets~=4.10",
+    "azure-keyvault-secrets~=4.11",
 ]
 
 [project.scripts]

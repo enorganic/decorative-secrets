@@ -78,7 +78,7 @@ def check_output(
     suppress_stderr: bool = True,
     shell: bool = False,
     echo: bool = False,
-) -> bytes: ...
+) -> str: ...
 
 
 def check_output(  # noqa: C901
