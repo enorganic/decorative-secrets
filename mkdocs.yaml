@@ -11,6 +11,7 @@ nav:
     - environment: 'api/environment.md'
     - defaults: 'api/defaults.md'
     - callback: 'api/callback.md'
+    - utilities: 'api/utilities.md'
 - Contributing: 'contributing.md'
 - License: 'license.md'
 theme:

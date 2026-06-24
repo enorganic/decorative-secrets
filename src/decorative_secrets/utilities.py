@@ -1,8 +1,12 @@
 import asyncio
 import inspect
 import logging
+import signal
 import sys
+import threading
 from collections.abc import Awaitable, Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import partial, wraps
 from time import sleep
 from traceback import format_exception
@@ -435,6 +439,133 @@ def retry(  # noqa: C901
                             *args, __attempt_number=__attempt_number, **kwargs
                         )
                 return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorating_function
+
+
+def _run_with_sigalrm_timeout(
+    function: Callable,
+    seconds: float,
+    message: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """
+    Run `function` synchronously, interrupting it with a `TimeoutError`
+    via `SIGALRM` if it has not returned within `seconds`. This may only
+    be used from the main thread of the main interpreter.
+    """
+
+    def handle_alarm(signal_number: int, frame: Any) -> None:  # noqa: ARG001
+        raise TimeoutError(message)
+
+    previous_handler = signal.signal(signal.SIGALRM, handle_alarm)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        return function(*args, **kwargs)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _run_with_thread_pool_timeout(
+    function: Callable,
+    seconds: float,
+    message: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """
+    Run `function` in a worker thread, raising `TimeoutError` if it has
+    not returned within `seconds`. The worker thread cannot be killed, so
+    it continues to run to completion after the timeout is raised.
+    """
+    executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(function, *args, **kwargs)
+        try:
+            return future.result(timeout=seconds)
+        except FuturesTimeoutError:
+            raise TimeoutError(message) from None
+    finally:
+        # Do not wait: a timed-out worker thread may still be running.
+        executor.shutdown(wait=False)
+
+
+def timeout(seconds: float) -> Callable[[Callable], Callable]:
+    """
+    This is a decorator which enforces a maximum execution time on the
+    decorated function. If the function does not return within `seconds`,
+    a `TimeoutError` is raised.
+
+    This works for both synchronous and asynchronous functions:
+
+    -   Asynchronous functions are bounded using `asyncio.wait_for`, which
+        cancels the coroutine on timeout.
+    -   Synchronous functions are bounded using `signal.SIGALRM` when it is
+        available and the call originates from the main thread, which
+        interrupts the function in place.
+    -   Otherwise (for example on Windows, or when called from a non-main
+        thread), synchronous functions are run in a worker thread. The
+        worker thread cannot be killed, so it continues running to
+        completion after the `TimeoutError` is raised.
+
+    Parameters:
+        seconds: The maximum number of seconds to allow. Must be greater
+            than zero.
+
+    Examples:
+        ```python
+        from time import sleep
+
+        from decorative_secrets.utilities import timeout
+
+
+        @timeout(0.1)
+        def slow() -> str:
+            sleep(1)
+            return "done"
+
+
+        try:
+            slow()
+        except TimeoutError:
+            print("timed out")
+        ```
+    """
+    if seconds <= 0:
+        raise ValueError(seconds)
+
+    def decorating_function(function: Callable) -> Callable:
+        message: str = (
+            f"{function.__qualname__} timed out after {seconds} seconds"
+        )
+        if iscoroutinefunction(function):
+
+            @wraps(function)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                try:
+                    return await asyncio.wait_for(
+                        function(*args, **kwargs), timeout=seconds
+                    )
+                except asyncio.TimeoutError:
+                    raise TimeoutError(message) from None
+
+        else:
+
+            @wraps(function)
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                if hasattr(signal, "SIGALRM") and (
+                    threading.current_thread() is threading.main_thread()
+                ):
+                    return _run_with_sigalrm_timeout(
+                        function, seconds, message, args, kwargs
+                    )
+                return _run_with_thread_pool_timeout(
+                    function, seconds, message, args, kwargs
+                )
 
         return wrapper
 

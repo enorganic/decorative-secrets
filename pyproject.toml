@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.12.15"
+version = "0.13.0"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -32,7 +32,7 @@ aws = [
 ]
 onepassword = [
     "onepassword-sdk~=0.4",
-    "onepasswordconnectsdk~=2.0",
+    "onepasswordconnectsdk~=2.1",
 ]
 google = [
     "google-cloud-secret-manager~=2.27",
@@ -44,7 +44,7 @@ all = [
     "databricks-sdk",
     "boto3~=1.42",
     "onepassword-sdk~=0.4",
-    "onepasswordconnectsdk~=2.0",
+    "onepasswordconnectsdk~=2.1",
     "google-cloud-secret-manager~=2.27",
     "azure-keyvault-secrets~=4.11",
 ]
