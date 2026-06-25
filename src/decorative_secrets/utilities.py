@@ -1,17 +1,99 @@
 import asyncio
+import atexit
 import inspect
 import logging
+import queue
 import signal
 import sys
 import threading
 from collections.abc import Awaitable, Callable, Iterable, Iterator
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from functools import partial, wraps
+from logging.handlers import QueueHandler, QueueListener
+from pathlib import Path
 from time import sleep
 from traceback import format_exception
-from typing import Any, Protocol, overload
+from typing import Any, Protocol, TextIO, overload
 from warnings import warn
+
+
+def get_logger(
+    name: str | None = None,
+    level: int | None = None,
+    formatter: logging.Formatter | type[logging.Formatter] | str | None = None,
+    file: TextIO | Path | str | None = None,
+    *,
+    propagate: bool = True,
+) -> logging.Logger:
+    """
+    Get a non-blocking logger.
+
+    Parameters:
+        name: Logger name, typically the `__name__` of the calling module.
+        level: Optional log level to set on the logger and handlers. If not
+            specified, defaults to `logging.INFO` if creating a new
+            logger, otherwise uses the existing logger's level.
+        formatter: Optional formatter to use for the logger. Can be an instance
+            of `logging.Formatter`, a subclass of `logging.Formatter`, or a
+            format string.
+        propagate: Whether the logger should propagate messages to the root
+            logger.
+        file: A file-like object or path to write the log to.
+
+    Example:
+        ```python
+        import logging
+        import sys
+        from decorative_secrets.utilities import get_logger
+
+        log: logging.Logger = get_logger(
+            __name__,
+            formatter="%(asctime)s [%(levelname)s] %(message)s",
+            file=sys.stdout,
+        )
+        ```
+    """
+    logger: logging.Logger = logging.getLogger(name)
+    if logger.handlers:
+        if level is not None:
+            logger.setLevel(level)
+            for handler in logger.handlers:
+                handler.setLevel(level)
+    else:
+        level = level if (level is not None) else logging.INFO
+        logger.setLevel(level)
+        logger.propagate = propagate
+        log_queue: queue.Queue = queue.Queue(-1)
+        log_queue_listener: QueueListener
+        if file is not None:
+            if isinstance(file, str | Path):
+                file = open(file, "w")  # noqa: SIM115
+                atexit.register(file.close)
+            stream_handler: logging.StreamHandler = logging.StreamHandler(file)
+            stream_handler.setLevel(level)
+            log_queue_listener = QueueListener(
+                log_queue, stream_handler, respect_handler_level=True
+            )
+        else:
+            log_queue_listener = QueueListener(log_queue)
+        queue_handler: QueueHandler = QueueHandler(log_queue)
+        if hasattr(queue_handler, "listener"):
+            queue_handler.listener = log_queue_listener
+        queue_handler.setLevel(level)
+        if formatter is not None:
+            stream_handler.setFormatter(
+                logging.Formatter(formatter)
+                if isinstance(formatter, str)
+                else formatter()
+                if isinstance(formatter, type)
+                else formatter
+            )
+        logger.addHandler(queue_handler)
+        log_queue_listener.start()
+        atexit.register(log_queue_listener.stop)
+    return logger
+
+
+log: logging.Logger = get_logger(__name__)
 
 
 def iscoroutinefunction(function: Any) -> bool:
@@ -470,7 +552,23 @@ def _run_with_sigalrm_timeout(
         signal.signal(signal.SIGALRM, previous_handler)
 
 
-def _run_with_thread_pool_timeout(
+def _can_use_sigalrm() -> bool:
+    """
+    Return `True` if the `SIGALRM` timeout strategy can be used safely from
+    the current call site. It requires the `SIGALRM` signal, the main
+    thread, and no real-time interval timer already running. A running
+    timer indicates a nested `timeout`, and overwriting it would silently
+    disable the outer timeout, so in that case the thread-pool fallback is
+    used instead.
+    """
+    return (
+        hasattr(signal, "SIGALRM")
+        and threading.current_thread() is threading.main_thread()
+        and signal.getitimer(signal.ITIMER_REAL)[0] == 0.0
+    )
+
+
+def _run_with_thread_timeout(  # noqa: C901
     function: Callable,
     seconds: float,
     message: str,
@@ -478,20 +576,60 @@ def _run_with_thread_pool_timeout(
     kwargs: dict[str, Any],
 ) -> Any:
     """
-    Run `function` in a worker thread, raising `TimeoutError` if it has
-    not returned within `seconds`. The worker thread cannot be killed, so
-    it continues to run to completion after the timeout is raised.
+    Run `function` in a daemon thread, raising `TimeoutError` if it has not
+    returned within `seconds`. A daemon thread is used so that a timed-out
+    call which never returns cannot block interpreter shutdown by being
+    joined at exit. The thread cannot be killed, so it continues running to
+    completion after the timeout is raised; if it subsequently raises, that
+    exception is logged rather than silently discarded.
     """
-    executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=1)
-    try:
-        future = executor.submit(function, *args, **kwargs)
+    result: Any = None
+    error: BaseException | None = None
+    completed: threading.Event = threading.Event()
+    lock: threading.Lock = threading.Lock()
+    # `abandoned` is set by the calling thread, under `lock`, once it has
+    # given up waiting. The worker reads it under the same lock so that the
+    # decision to either hand back its outcome or log it as a late failure
+    # is atomic with the caller's decision to time out.
+    abandoned: bool = False
+
+    def run() -> None:
+        nonlocal error, result
         try:
-            return future.result(timeout=seconds)
-        except FuturesTimeoutError:
+            value: Any = function(*args, **kwargs)
+        except BaseException as raised:  # noqa: BLE001
+            with lock:
+                late: bool = abandoned
+                if not late:
+                    error = raised
+                    completed.set()
+            if late:
+                log.warning(
+                    "%s, but the abandoned call subsequently raised %s: %s",
+                    message,
+                    type(raised).__name__,
+                    raised,
+                )
+        else:
+            with lock:
+                if not abandoned:
+                    result = value
+                    completed.set()
+
+    thread: threading.Thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    if not completed.wait(timeout=seconds):
+        with lock:
+            # Re-check under the lock: the worker may have committed its
+            # outcome in the moment between `wait` expiring and this point.
+            timed_out: bool = not completed.is_set()
+            if timed_out:
+                abandoned = True
+        if timed_out:
             raise TimeoutError(message) from None
-    finally:
-        # Do not wait: a timed-out worker thread may still be running.
-        executor.shutdown(wait=False)
+    if error is not None:
+        raise error
+    return result
 
 
 def timeout(seconds: float) -> Callable[[Callable], Callable]:
@@ -505,12 +643,16 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
     -   Asynchronous functions are bounded using `asyncio.wait_for`, which
         cancels the coroutine on timeout.
     -   Synchronous functions are bounded using `signal.SIGALRM` when it is
-        available and the call originates from the main thread, which
-        interrupts the function in place.
-    -   Otherwise (for example on Windows, or when called from a non-main
-        thread), synchronous functions are run in a worker thread. The
-        worker thread cannot be killed, so it continues running to
-        completion after the `TimeoutError` is raised.
+        available, the call originates from the main thread, and no other
+        `timeout` is already active, which interrupts the function in
+        place.
+    -   Otherwise (for example on Windows, when called from a non-main
+        thread, or when nested inside another `timeout`), synchronous
+        functions are run in a daemon thread. The daemon thread cannot be
+        killed, so it continues running to completion after the
+        `TimeoutError` is raised; if it subsequently raises, that exception
+        is logged rather than silently discarded. A daemon thread is used
+        so that such a call cannot block interpreter shutdown.
 
     Parameters:
         seconds: The maximum number of seconds to allow. Must be greater
@@ -557,13 +699,11 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
 
             @wraps(function)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
-                if hasattr(signal, "SIGALRM") and (
-                    threading.current_thread() is threading.main_thread()
-                ):
+                if _can_use_sigalrm():
                     return _run_with_sigalrm_timeout(
                         function, seconds, message, args, kwargs
                     )
-                return _run_with_thread_pool_timeout(
+                return _run_with_thread_timeout(
                     function, seconds, message, args, kwargs
                 )
 
