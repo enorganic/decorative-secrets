@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import io
 import logging
+import signal
 import threading
 from collections.abc import Iterator
 from functools import partial
@@ -14,6 +15,7 @@ import pytest
 
 from decorative_secrets.utilities import (
     _default_retry_hook,
+    _run_with_sigalrm_timeout,
     as_dict,
     as_iter,
     as_str,
@@ -363,6 +365,40 @@ def test_timeout_invalid_seconds() -> None:
 
     with pytest.raises(ValueError):  # noqa: PT011
         timeout(0)
+
+
+@pytest.mark.skipif(
+    not hasattr(signal, "SIGALRM"),
+    reason="SIGALRM is unavailable on this platform",
+)
+def test_sigalrm_timeout_restores_preexisting_timer_and_handler() -> None:
+    """
+    The `SIGALRM` runner must restore any pre-existing `ITIMER_REAL` timer
+    and signal handler on exit, rather than unconditionally cancelling them.
+    This guards against a directly-reused runner silently swallowing an
+    outer alarm.
+    """
+
+    def preexisting_handler(signal_number: int, frame: object) -> None:
+        """A sentinel handler that should be restored, never invoked here."""
+
+    original_handler = signal.signal(signal.SIGALRM, preexisting_handler)
+    try:
+        # Arm a long timer that must survive the inner, fast call without
+        # firing during the test.
+        signal.setitimer(signal.ITIMER_REAL, 60.0)
+        result = _run_with_sigalrm_timeout(
+            lambda: "ok", 0.5, "inner timed out", (), {}
+        )
+        assert result == "ok"
+        remaining_delay, _ = signal.getitimer(signal.ITIMER_REAL)
+        # The pre-existing timer is still pending (not cancelled)...
+        assert remaining_delay > 0
+        # ...and the original handler is restored.
+        assert signal.getsignal(signal.SIGALRM) is preexisting_handler
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, original_handler)
 
 
 def test_iscoroutinefunction() -> None:

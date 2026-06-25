@@ -544,12 +544,28 @@ def _run_with_sigalrm_timeout(
         raise TimeoutError(message)
 
     previous_handler = signal.signal(signal.SIGALRM, handle_alarm)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
+    # `setitimer` returns the timer it replaced. `_can_use_sigalrm` only
+    # permits this strategy when no timer is already running, so this is
+    # normally `(0.0, 0.0)`; capturing and restoring it anyway ensures we
+    # never silently cancel a pre-existing alarm if that invariant is ever
+    # bypassed (e.g. if this helper is reused directly).
+    previous_delay: float
+    previous_interval: float
+    previous_delay, previous_interval = signal.setitimer(
+        signal.ITIMER_REAL, seconds
+    )
     try:
         return function(*args, **kwargs)
     finally:
+        # Cancel our timer and restore the prior handler before re-arming
+        # any pre-existing timer, so a late alarm can never fire into our
+        # handler.
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
+        if previous_delay:
+            signal.setitimer(
+                signal.ITIMER_REAL, previous_delay, previous_interval
+            )
 
 
 def _can_use_sigalrm() -> bool:
