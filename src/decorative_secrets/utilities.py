@@ -1,5 +1,6 @@
 import asyncio
 import atexit
+import contextlib
 import inspect
 import logging
 import queue
@@ -659,8 +660,11 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
 
     This works for both synchronous and asynchronous functions:
 
-    -   Asynchronous functions are bounded using `asyncio.wait_for`, which
-        cancels the coroutine on timeout.
+    -   Asynchronous functions are bounded using `asyncio.wait`, which
+        cancels the coroutine on timeout. `asyncio.wait` is used in
+        preference to `asyncio.wait_for` so the timeout does not rely on
+        `current_task()`, which is unavailable once a running loop has been
+        patched by `nest_asyncio`.
     -   Synchronous functions are bounded using `signal.SIGALRM` when it is
         available, the call originates from the main thread, and no other
         `timeout` is already active, which interrupts the function in
@@ -707,12 +711,25 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
 
             @wraps(function)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
-                try:
-                    return await asyncio.wait_for(
-                        function(*args, **kwargs), timeout=seconds
-                    )
-                except asyncio.TimeoutError:
+                # `asyncio.wait` (rather than `asyncio.wait_for`) is used so
+                # the timeout does not depend on `current_task()`: on Python
+                # 3.12+, `wait_for` delegates to `asyncio.timeouts.timeout`,
+                # which raises `RuntimeError("Timeout should be used inside a
+                # task")` when no current task is set -- as happens once
+                # `nest_asyncio` has patched the running loop (see
+                # `decorative_secrets._utilities.asyncio_run`).
+                task: asyncio.Future = asyncio.ensure_future(
+                    function(*args, **kwargs)
+                )
+                done, _pending = await asyncio.wait({task}, timeout=seconds)
+                if task not in done:
+                    task.cancel()
+                    with contextlib.suppress(
+                        asyncio.CancelledError, Exception
+                    ):
+                        await task
                     raise TimeoutError(message) from None
+                return task.result()
 
         else:
 
