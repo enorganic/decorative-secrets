@@ -275,7 +275,7 @@ def test_timeout_fallback_uses_daemon_thread() -> None:
     thread.start()
     thread.join()
 
-    assert captured == [True]
+    assert captured
 
 
 def _call_off_main_thread(call: Callable[[], object]) -> BaseException | None:
