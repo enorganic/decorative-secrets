@@ -59,6 +59,18 @@ def get_logger(
             logger.setLevel(level)
             for handler in logger.handlers:
                 handler.setLevel(level)
+                # Also update the downstream handlers owned by the
+                # `QueueListener`. The listener is created with
+                # `respect_handler_level=True`, so a level set only on the
+                # logger and its `QueueHandler` would still be enforced at
+                # the original (higher) level here, dropping records the
+                # logger now permits.
+                listener: QueueListener | None = getattr(
+                    handler, "listener", None
+                )
+                if listener is not None:
+                    for downstream_handler in listener.handlers:
+                        downstream_handler.setLevel(level)
     else:
         level = level if (level is not None) else logging.INFO
         logger.setLevel(level)
@@ -78,8 +90,11 @@ def get_logger(
             log_queue, stream_handler, respect_handler_level=True
         )
         queue_handler: QueueHandler = QueueHandler(log_queue)
-        if hasattr(queue_handler, "listener"):
-            queue_handler.listener = log_queue_listener
+        # Store the listener on the handler so a later `get_logger` call can
+        # reach (and re-level) the listener's downstream handlers. The
+        # stdlib `QueueHandler` has no `listener` attribute, so this is set
+        # unconditionally rather than guarded behind `hasattr`.
+        queue_handler.listener = log_queue_listener  # type: ignore[attr-defined]
         queue_handler.setLevel(level)
         if formatter is not None:
             stream_handler.setFormatter(
