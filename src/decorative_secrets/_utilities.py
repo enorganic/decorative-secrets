@@ -4,7 +4,7 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
-from functools import cache, update_wrapper
+from functools import cache
 from inspect import Parameter, Signature, signature
 from io import TextIOWrapper
 from shutil import which
@@ -21,7 +21,7 @@ from decorative_secrets.errors import (
     WinGetNotInstalledError,
 )
 from decorative_secrets.subprocess import check_output
-from decorative_secrets.utilities import as_dict
+from decorative_secrets.utilities import as_dict, as_tuple
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Iterable, Sequence
@@ -92,19 +92,6 @@ def which_winget() -> str | None:
         raise WinGetNotInstalledError from error
     else:
         return winget
-
-
-def as_tuple(
-    user_function: Callable[..., Iterable[Any]],
-) -> Callable[..., tuple[Any, ...]]:
-    """
-    This is a decorator which will return an iterable as a tuple.
-    """
-
-    def wrapper(*args: Any, **kwargs: Any) -> tuple[Any, ...]:
-        return tuple(user_function(*args, **kwargs) or ())
-
-    return update_wrapper(wrapper, user_function)
 
 
 @as_tuple
