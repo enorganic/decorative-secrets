@@ -552,6 +552,24 @@ def test_get_logger_updates_existing_level() -> None:
     assert all(handler.level == logging.WARNING for handler in second.handlers)
 
 
+def test_get_logger_lowering_level_reaches_listener_handler() -> None:
+    """
+    Lowering the level on an existing logger must also lower the level of
+    the downstream handlers owned by the `QueueListener`. The listener is
+    created with `respect_handler_level=True`, so a record permitted by the
+    logger and its `QueueHandler` is still dropped if the listener's handler
+    retains its original, higher level.
+    """
+    stream: io.StringIO = io.StringIO()
+    name: str = "test_get_logger_lower_level"
+    get_logger(
+        name, level=logging.INFO, formatter="%(message)s", stream=stream
+    )
+    logger: logging.Logger = get_logger(name, level=logging.DEBUG)
+    logger.debug("debug-record")
+    assert "debug-record" in stream_until(stream, "debug-record")
+
+
 def test_get_logger_with_stream_and_string_formatter() -> None:
     """
     When a stream and a format string are provided, emitted records are
