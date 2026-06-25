@@ -180,12 +180,13 @@ def test_timeout_async_cancels_inner_task_when_caller_cancelled() -> None:
     awaiting, the inner task must be cancelled and drained rather than left
     running in the background.
     """
-    counter: dict[str, int] = {"n": 0}
+    counter: int = 0
 
     @timeout(10)
     async def busy() -> None:
+        nonlocal counter
         while True:
-            counter["n"] += 1
+            counter += 1
             await asyncio.sleep(0.01)
 
     async def main() -> int:
@@ -195,10 +196,10 @@ def test_timeout_async_cancels_inner_task_when_caller_cancelled() -> None:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
-        count_at_cancel: int = counter["n"]
+        count_at_cancel: int = counter
         # Give any orphaned inner task time to keep running.
         await asyncio.sleep(0.1)
-        return counter["n"] - count_at_cancel
+        return counter - count_at_cancel
 
     assert asyncio.run(main()) == 0
 
