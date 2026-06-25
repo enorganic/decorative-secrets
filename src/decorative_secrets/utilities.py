@@ -23,7 +23,7 @@ def get_logger(
     formatter: logging.Formatter | type[logging.Formatter] | str | None = None,
     stream: TextIO | Path | str | None = None,
     *,
-    propagate: bool = True,
+    propagate: bool | None = None,
 ) -> logging.Logger:
     """
     Get a non-blocking logger.
@@ -37,7 +37,8 @@ def get_logger(
             of `logging.Formatter`, a subclass of `logging.Formatter`, or a
             format string.
         propagate: Whether the logger should propagate messages to the root
-            logger.
+            logger. If `None` (the default), propagation is left unchanged
+            for an existing logger and defaults to `True` for a new one.
         stream: A file-like object or path to write the log to.
 
     Example:
@@ -55,6 +56,8 @@ def get_logger(
     """
     logger: logging.Logger = logging.getLogger(name)
     if logger.handlers:
+        if propagate is not None:
+            logger.propagate = propagate
         if level is not None:
             logger.setLevel(level)
             for handler in logger.handlers:
@@ -74,7 +77,7 @@ def get_logger(
     else:
         level = level if (level is not None) else logging.INFO
         logger.setLevel(level)
-        logger.propagate = propagate
+        logger.propagate = True if propagate is None else propagate
         log_queue: queue.Queue = queue.Queue(-1)
         log_queue_listener: QueueListener
         stream_handler: logging.StreamHandler
@@ -736,19 +739,33 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
                 task: asyncio.Future = asyncio.ensure_future(
                     function(*args, **kwargs)
                 )
-                await asyncio.wait({task}, timeout=seconds)
+
+                async def _cancel_and_drain() -> None:
+                    # Cancel the inner task and await it so the cancellation
+                    # propagates into the coroutine rather than leaving it
+                    # running in the background (and so any exception it
+                    # raises is retrieved rather than reported as "Task
+                    # exception was never retrieved").
+                    task.cancel()
+                    with contextlib.suppress(
+                        asyncio.CancelledError, Exception
+                    ):
+                        await task
+
+                try:
+                    await asyncio.wait({task}, timeout=seconds)
+                except asyncio.CancelledError:
+                    # The caller cancelled this wrapper; drain the inner
+                    # task before propagating the cancellation.
+                    await _cancel_and_drain()
+                    raise
                 if task.done():
                     # Completed within the limit: return its value, or
                     # re-raise the exception it raised.
                     return task.result()
-                # The call exceeded the limit. Cancel the task and drain it
-                # so the cancellation propagates into the coroutine; any
-                # error raised during teardown is discarded because the
-                # documented contract is that a timed-out call always raises
-                # `TimeoutError`.
-                task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await task
+                # The call exceeded the limit; the documented contract is
+                # that a timed-out call always raises `TimeoutError`.
+                await _cancel_and_drain()
                 raise TimeoutError(message) from None
 
         else:

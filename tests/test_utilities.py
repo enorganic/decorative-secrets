@@ -174,6 +174,35 @@ def test_timeout_async_works_after_nest_asyncio_patch() -> None:
     assert asyncio.run(fast()) == "ok"
 
 
+def test_timeout_async_cancels_inner_task_when_caller_cancelled() -> None:
+    """
+    If the caller cancels the `@timeout`-wrapped coroutine while it is
+    awaiting, the inner task must be cancelled and drained rather than left
+    running in the background.
+    """
+    counter: dict[str, int] = {"n": 0}
+
+    @timeout(10)
+    async def busy() -> None:
+        while True:
+            counter["n"] += 1
+            await asyncio.sleep(0.01)
+
+    async def main() -> int:
+        task: asyncio.Future = asyncio.ensure_future(busy())
+        # Let the wrapper start and reach `asyncio.wait`.
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        count_at_cancel: int = counter["n"]
+        # Give any orphaned inner task time to keep running.
+        await asyncio.sleep(0.1)
+        return counter["n"] - count_at_cancel
+
+    assert asyncio.run(main()) == 0
+
+
 def test_timeout_fallback_expires() -> None:
     """
     When the decorated function runs outside the main thread, the
@@ -550,6 +579,20 @@ def test_get_logger_updates_existing_level() -> None:
     assert second.level == logging.WARNING
     assert len(second.handlers) == handler_count
     assert all(handler.level == logging.WARNING for handler in second.handlers)
+
+
+def test_get_logger_updates_propagate_on_existing_logger() -> None:
+    """
+    When `propagate` is explicitly passed for an existing logger, it is
+    applied rather than silently ignored (it is not limited to logger
+    creation).
+    """
+    name: str = "test_get_logger_propagate_update"
+    first: logging.Logger = get_logger(name, level=logging.INFO)
+    assert first.propagate is True
+    second: logging.Logger = get_logger(name, propagate=False)
+    assert second is first
+    assert second.propagate is False
 
 
 def test_get_logger_lowering_level_reaches_listener_handler() -> None:
