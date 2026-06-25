@@ -11,6 +11,7 @@ from functools import partial
 from time import sleep
 from typing import TYPE_CHECKING
 
+import nest_asyncio  # type: ignore[import-untyped]
 import pytest
 
 from decorative_secrets.utilities import (
@@ -151,6 +152,26 @@ def test_timeout_async_expires() -> None:
 
     with pytest.raises(TimeoutError):
         asyncio.run(slow())
+
+
+def test_timeout_async_works_after_nest_asyncio_patch() -> None:
+    """
+    `decorative_secrets._utilities.asyncio_run` calls `nest_asyncio.apply`,
+    which globally and irreversibly patches `asyncio`. On Python 3.12+,
+    `asyncio.wait_for` is implemented via the `asyncio.timeouts.timeout`
+    context manager, whose `__aenter__` raises
+    `RuntimeError("Timeout should be used inside a task")` when
+    `current_task()` is `None` -- which is the case under the nest_asyncio
+    patch. The async `@timeout` wrapper must therefore not depend on that
+    machinery.
+    """
+    nest_asyncio.apply()
+
+    @timeout(1)
+    async def fast() -> str:
+        return "ok"
+
+    assert asyncio.run(fast()) == "ok"
 
 
 def test_timeout_fallback_expires() -> None:
