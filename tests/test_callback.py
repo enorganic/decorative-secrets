@@ -193,7 +193,7 @@ def test_callback_uses_async_callback_for_coroutine_annotation() -> None:
     ) -> Any:
         return value
 
-    return_value.__annotations__["x"] = Coroutine
+    return_value.__annotations__["value"] = Coroutine
     decorated = apply_callback_arguments(async_callback, value="value_lookup")(
         return_value
     )
