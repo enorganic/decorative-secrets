@@ -721,15 +721,20 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
                 task: asyncio.Future = asyncio.ensure_future(
                     function(*args, **kwargs)
                 )
-                done, _pending = await asyncio.wait({task}, timeout=seconds)
-                if task not in done:
-                    task.cancel()
-                    with contextlib.suppress(
-                        asyncio.CancelledError, Exception
-                    ):
-                        await task
-                    raise TimeoutError(message) from None
-                return task.result()
+                await asyncio.wait({task}, timeout=seconds)
+                if task.done():
+                    # Completed within the limit: return its value, or
+                    # re-raise the exception it raised.
+                    return task.result()
+                # The call exceeded the limit. Cancel the task and drain it
+                # so the cancellation propagates into the coroutine; any
+                # error raised during teardown is discarded because the
+                # documented contract is that a timed-out call always raises
+                # `TimeoutError`.
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+                raise TimeoutError(message) from None
 
         else:
 
