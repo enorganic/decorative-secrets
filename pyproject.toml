@@ -190,10 +190,6 @@ disallow_incomplete_defs = true
 include = [
     "src/**/*.py",
 ]
-omit = [
-    "src/**/_*.py",
-    "src/**/errors.py",
-]
 
 [tool.coverage.paths]
 source = [
