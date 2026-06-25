@@ -16,7 +16,7 @@ def test_apply_environment_arguments(onepassword_vault: str) -> None:
     try:
         os.environ["OP_SERVICE_ACCOUNT_TOKEN"] = read_onepassword_secret(
             f"op://{onepassword_vault}/62u4plbr2i7ueb4boywtbbyd24/credential",
-            account="my.1password.com",
+            account="enorganic.1password.com",
         )
 
         @apply_environment_arguments(token="token_environment_variable")

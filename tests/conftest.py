@@ -30,15 +30,15 @@ def get_databricks_env(onepassword_vault: str) -> dict[str, str | None]:
     return {
         "DATABRICKS_HOST": read_onepassword_secret(
             f"op://{onepassword_vault}/Databricks Client/hostname",
-            account="my.1password.com",
+            account="enorganic.1password.com",
         ),
         "DATABRICKS_CLIENT_ID": read_onepassword_secret(
             f"op://{onepassword_vault}/Databricks Client/username",
-            account="my.1password.com",
+            account="enorganic.1password.com",
         ),
         "DATABRICKS_CLIENT_SECRET": read_onepassword_secret(
             f"op://{onepassword_vault}/Databricks Client/credential",
-            account="my.1password.com",
+            account="enorganic.1password.com",
         ),
     }
 

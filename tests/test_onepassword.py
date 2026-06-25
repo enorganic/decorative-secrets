@@ -54,7 +54,7 @@ def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
     assert asyncio.run(
         async_read_onepassword_secret(
             f"op://{onepassword_vault}/Databricks Client/hostname",
-            account="my.1password.com",
+            account="enorganic.1password.com",
         )
     )
 
@@ -65,7 +65,7 @@ def test_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     assert read_onepassword_secret(
         f"op://{onepassword_vault}/Databricks Client/hostname",
-        account="my.1password.com",
+        account="enorganic.1password.com",
     )
 
 
@@ -75,7 +75,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
     """
 
     @apply_onepassword_arguments(
-        onepassword_account="my.1password.com",
+        onepassword_account="enorganic.1password.com",
         databricks_host="databricks_host_onepassword",
         databricks_client_id="databricks_client_id_onepassword",
         databricks_client_secret=("databricks_client_secret_onepassword"),
