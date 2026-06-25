@@ -259,11 +259,12 @@ def test_timeout_fallback_uses_daemon_thread() -> None:
     timed-out (or otherwise still-running) call cannot block interpreter
     shutdown by being joined at exit.
     """
-    captured: list[bool] = []
+    captured: bool = False
 
     @timeout(1)
     def record() -> str:
-        captured.append(threading.current_thread().daemon)
+        nonlocal captured
+        captured = threading.current_thread().daemon
         return "ok"
 
     def run() -> None:
@@ -283,18 +284,19 @@ def _call_off_main_thread(call: Callable[[], object]) -> BaseException | None:
     fallback) and return the exception it raised, or `None` if it returned
     normally.
     """
-    outcome: list[BaseException] = []
+    caught_error: BaseException | None = None
 
     def target() -> None:
         try:
             call()
         except BaseException as error:  # noqa: BLE001
-            outcome.append(error)
+            nonlocal caught_error
+            caught_error = error
 
     thread = threading.Thread(target=target)
     thread.start()
     thread.join()
-    return outcome[0] if outcome else None
+    return caught_error
 
 
 def test_timeout_fallback_propagates_error() -> None:
