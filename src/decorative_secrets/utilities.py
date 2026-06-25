@@ -670,7 +670,11 @@ def _run_with_thread_timeout(  # noqa: C901
     return result
 
 
-def timeout(seconds: float) -> Callable[[Callable], Callable]:
+def timeout(
+    seconds: float,
+    *,
+    use_signals: bool | None = None,
+) -> Callable[[Callable], Callable]:
     """
     This is a decorator which enforces a maximum execution time on the
     decorated function. If the function does not return within `seconds`,
@@ -698,6 +702,10 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
     Parameters:
         seconds: The maximum number of seconds to allow. Must be greater
             than zero.
+        use_signals: If `False`, the `SIGALRM` strategy is passed over
+            in favor of the daemon-thread strategy even when `SIGALRM` is
+            available. If `True` or `None`, the `SIGALRM` strategy is used when
+            available, and the daemon-thread strategy is used otherwise.
 
     Examples:
         ```python
@@ -772,7 +780,7 @@ def timeout(seconds: float) -> Callable[[Callable], Callable]:
 
             @wraps(function)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
-                if _can_use_sigalrm():
+                if (use_signals is not False) and _can_use_sigalrm():
                     return _run_with_sigalrm_timeout(
                         function, seconds, message, args, kwargs
                     )
