@@ -54,24 +54,12 @@ def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
     """
-    try:
-        assert asyncio.run(
-            async_read_onepassword_secret(
-                f"op://{onepassword_vault}/Databricks Client/hostname",
-                account="my.1password.com",
-            )
+    assert asyncio.run(
+        async_read_onepassword_secret(
+            f"op://{onepassword_vault}/Databricks Client/hostname",
+            account="my.1password.com",
         )
-    except RateLimitExceededException:
-        # TODO: Remove this pending approval of
-        # [this](https://github.com/1Password/for-open-source/issues/1337)
-        pass
-    except Exception:
-        # TODO: Remove this pending approval of
-        # [this](https://github.com/1Password/for-open-source/issues/1337)
-        if not (
-            "rate limit exceeded" in get_exception_text() and os.getenv("CI")
-        ):
-            raise
+    )
 
 
 def test_read_onepassword_secret(onepassword_vault: str) -> None:
