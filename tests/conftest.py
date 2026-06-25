@@ -2,6 +2,7 @@ import os
 
 import pytest
 
+from decorative_secrets import utilities
 from decorative_secrets.onepassword import read_onepassword_secret
 
 DEFAULT_OP_VAULT: str = "decorative-secrets-test"
@@ -40,3 +41,17 @@ def get_databricks_env(onepassword_vault: str) -> dict[str, str | None]:
             account="my.1password.com",
         ),
     }
+
+
+@pytest.fixture
+def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Replace the blocking backoff sleeps used by `retry` with no-ops so
+    retry behavior can be tested without waiting for exponential backoff.
+    """
+
+    async def _async_sleep(*_: object, **__: object) -> None:
+        return None
+
+    monkeypatch.setattr(utilities, "sleep", lambda *_, **__: None)
+    monkeypatch.setattr(utilities.asyncio, "sleep", _async_sleep)
