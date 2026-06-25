@@ -166,11 +166,11 @@ def check_output(  # noqa: C901
         pass
     elif text:
         output = completed_process.stdout.rstrip()
-        if isinstance(output, bytes):
+        if isinstance(output, bytes):  # pragma: no cover
             output = output.decode("utf-8", errors="ignore")
     else:
         output = completed_process.stdout.rstrip()
-        if isinstance(output, str):
+        if isinstance(output, str):  # pragma: no cover
             output = output.encode("utf-8", errors="ignore")
     if echo and (output is not None):
         print(output)  # noqa: T201

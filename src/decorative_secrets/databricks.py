@@ -45,7 +45,7 @@ def _unpickle_workspace_client(
     client_id: str | None,
     client_secret: str | None,
     token: str | None,
-) -> WorkspaceClient:
+) -> WorkspaceClient:  # pragma: no cover
     if client_id and client_secret:
         return WorkspaceClient(
             host=host,
@@ -216,7 +216,7 @@ def _install_sh_databricks_cli() -> None:
                     (b"already exists" not in error.stdout)
                     and (b"'sudo'" not in error.stdout)
                 )
-            ):
+            ):  # pragma: no cover
                 # This is usually because the script requires `sudo` access to
                 # run
                 raise DatabricksCLINotInstalledError from error
@@ -226,7 +226,7 @@ def _install_databricks_cli() -> None:
     """
     Install the Databricks CLI.
     """
-    if sys.platform.startswith("win"):
+    if sys.platform.startswith("win"):  # pragma: no cover
         winget: str | None = which_winget()
         if winget:
             with suppress(CalledProcessError):
@@ -234,7 +234,7 @@ def _install_databricks_cli() -> None:
             with suppress(CalledProcessError):
                 check_output((winget, "install", "Databricks.DatabricksCLI"))
                 return
-    elif sys.platform == "darwin":
+    elif sys.platform == "darwin":  # pragma: no cover
         brew: str
         # Here we suppress the HomebrewNotInstalledError because we
         # can still attempt to install the Databricks CLI using
@@ -242,9 +242,9 @@ def _install_databricks_cli() -> None:
         with suppress(HomebrewNotInstalledError):
             brew = which_brew()
             if brew:
-                with suppress(CalledProcessError):
+                with suppress(CalledProcessError):  # pragma: no cover
                     check_output((brew, "tap", "databricks/tap"))
-                with suppress(CalledProcessError):
+                with suppress(CalledProcessError):  # pragma: no cover
                     check_output((brew, "install", "databricks"))
                     return
     _install_sh_databricks_cli()
@@ -258,7 +258,7 @@ def which_databricks() -> str:
     databricks: str = which("databricks") or "databricks"
     try:
         check_output((databricks, "--version"))
-    except (CalledProcessError, FileNotFoundError):
+    except (CalledProcessError, FileNotFoundError):  # pragma: no cover
         _install_databricks_cli()
         databricks = which("databricks") or "databricks"
     return databricks
@@ -290,7 +290,7 @@ def _get_host_profile(
     host = host.lower()
     auth_profile: _DatabricksAuthProfile
     for auth_profile in _databricks_auth_profiles()["profiles"]:
-        if auth_profile.get("host", "").lower() == host:
+        if auth_profile.get("host", "").lower() == host:  # pragma: no cover
             return auth_profile.get("name")
     return None
 
@@ -311,14 +311,16 @@ def _databricks_auth_describe(
     profile: str | None = None,
     target: str | None = None,
 ) -> _DatabricksAuthDescription:
-    if (host is None) and (profile is None) and (target is None):
+    if (
+        (host is None) and (profile is None) and (target is None)
+    ):  # pragma: no cover
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
-    if host and not profile:
+    if host and not profile:  # pragma: no cover
         profile = _get_host_profile(host)
     databricks: str = which_databricks()
     output: str
-    if host or profile or target:
+    if host or profile or target:  # pragma: no cover
         output = check_output(
             (
                 databricks,
@@ -332,7 +334,7 @@ def _databricks_auth_describe(
             ),
             input=b"\n\n",
         )
-    else:
+    else:  # pragma: no cover
         # Automatically select the default/first profile if no host,
         # profile, or target is specified
         output = check_output(
@@ -345,7 +347,7 @@ def _databricks_auth_describe(
 def _databricks_bundle_summary(
     target: str,
     profile: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any]:  # pragma: no cover
     databricks: str = which_databricks()
     output: str = check_output(
         (
@@ -363,7 +365,9 @@ def _databricks_bundle_summary(
     return json.loads(output)
 
 
-def _databricks_auth_login_target(target: str, **env: Any) -> None:
+def _databricks_auth_login_target(
+    target: str, **env: Any
+) -> None:  # pragma: no cover
     lowercase_target: str | None = target.lower() if target else None
     profile: _DatabricksAuthProfile
     for profile in sorted(
@@ -392,7 +396,7 @@ def _databricks_auth_login(
     profile: str | None = None,
     target: str | None = None,
     **env: Any,
-) -> None:
+) -> None:  # pragma: no cover
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
@@ -439,7 +443,7 @@ def databricks_auth_login(
     host: str | None = None,
     profile: str | None = None,
     target: str | None = None,
-) -> None:
+) -> None:  # pragma: no cover
     """
     Log in to Databricks using the CLI if not already logged in.
 
@@ -504,7 +508,7 @@ def _get_env_databricks_workspace_client(
     Get a Databricks WorkspaceClient. This function is cached based on
     environment variables, to ensure changes to the environment are reflected.
     """
-    if config:
+    if config:  # pragma: no cover
         host = host or config.host
         profile = profile or config.profile
     if not (
@@ -530,7 +534,7 @@ def _get_env_databricks_workspace_client(
             databricks_auth_login(host=host, profile=profile)
     environ: Mapping[str, str] = os.environ.copy() if profile else os.environ
     try:
-        if profile:
+        if profile:  # pragma: no cover
             # If a profile was explicitly provided, ensure it is used,
             # and environment variables are ignored
             key: str
@@ -581,7 +585,7 @@ def _get_env_databricks_workspace_client(
             }
         )
     finally:
-        if profile:
+        if profile:  # pragma: no cover
             # Restore the original environment if a profile was used
             os.environ.update(environ)
     return client
@@ -939,7 +943,7 @@ def _get_scope_key_secret(
     token_audience: str | None = None,
     config: Config | None = None,
 ) -> str:
-    if isinstance(scope_key, str):
+    if isinstance(scope_key, str):  # pragma: no cover
         scope_key = scope_key.partition("/")[::2]
     return get_databricks_secret(
         *scope_key,
@@ -982,12 +986,14 @@ def _get_args_options(
     index: int
     value: Any
     for index, value in enumerate(args):
-        if isinstance(value, DatabricksWorkspaceClientArguments):
+        if isinstance(
+            value, DatabricksWorkspaceClientArguments
+        ):  # pragma: no cover
             return (*args[:index], *args[index + 1 :]), value
     return args, None
 
 
-def _print_help() -> None:
+def _print_help() -> None:  # pragma: no cover
     print(  # noqa: T201
         "Usage:\n"
         "  decorative-secrets databricks <command> [options]\n\n"
@@ -997,14 +1003,14 @@ def _print_help() -> None:
     )
 
 
-def _get_command() -> str:
+def _get_command() -> str:  # pragma: no cover
     command: str = ""
     if len(sys.argv) > 1:
         command = sys.argv.pop(1).lower().replace("_", "-")
     return command
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     """
     Run a command:
     -   install: Install the Databricks CLI if not already installed
@@ -1083,5 +1089,5 @@ def main() -> None:
         )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

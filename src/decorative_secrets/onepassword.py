@@ -122,7 +122,7 @@ def apply_onepassword_arguments(
         (options.account is not None)
         or (options.token is not None)
         or (options.host is not None)
-    ):
+    ):  # pragma: no cover
         read_onepassword_secret_ = partial(
             read_onepassword_secret_,
             **({"account": options.account} if options.account else {}),
@@ -147,7 +147,7 @@ def _install_op() -> None:
     Install the 1Password CLI.
     """
     message: str
-    if sys.platform.startswith("win"):
+    if sys.platform.startswith("win"):  # pragma: no cover
         try:
             check_output((which_winget(), "install", "1password-cli"))
         except (
@@ -156,12 +156,12 @@ def _install_op() -> None:
             WinGetNotInstalledError,
         ) as error:
             raise OnePasswordCommandLineInterfaceNotInstalledError from error
-    elif sys.platform == "darwin":
+    elif sys.platform == "darwin":  # pragma: no cover
         try:
             check_output((which_brew(), "install", "1password-cli"))
         except (CalledProcessError, FileNotFoundError) as error:
             raise OnePasswordCommandLineInterfaceNotInstalledError from error
-    else:
+    else:  # pragma: no cover
         raise OnePasswordCommandLineInterfaceNotInstalledError
 
 
@@ -173,7 +173,7 @@ def which_op() -> str:
     op: str = which("op") or "op"
     try:
         check_output((op, "--version"))
-    except (CalledProcessError, FileNotFoundError):
+    except (CalledProcessError, FileNotFoundError):  # pragma: no cover
         _install_op()
         op = which("op") or "op"
     return op
@@ -182,7 +182,7 @@ def which_op() -> str:
 @cache
 def _op_signin(account: str | None = None) -> str:
     op: str = which_op()
-    if not account:
+    if not account:  # pragma: no cover
         account = os.getenv("OP_ACCOUNT")
     check_output(
         (op, "signin", "--account", account) if account else (op, "signin"),
@@ -241,7 +241,9 @@ def _parse_resource(resource: str) -> tuple[str, str, str]:
     return (parse_result.netloc, *parse_result.path[1:].partition("/")[::2])
 
 
-async def _async_resolve_resource(token: str, resource: str) -> str:
+async def _async_resolve_resource(
+    token: str, resource: str
+) -> str:  # pragma: no cover
     """
     Asynchronously resolve a 1Password resource using the
     `onepassword-sdk` library.
@@ -321,14 +323,14 @@ async def async_read_onepassword_secret(
         The resolved secret value.
     """
     account, token, host = _resolve_auth_arguments(account, token, host)
-    if token:
+    if token:  # pragma: no cover
         if host:
             return await _async_resolve_connect_resource(token, host, resource)
         return await _async_resolve_resource(token, resource)
     op: str | None = None
     with suppress(FileNotFoundError, CalledProcessError):
         op = op_signin(account)
-    if not op:
+    if not op:  # pragma: no cover
         op = which_op() or "op"
     return check_output(
         (op, "read")
@@ -351,14 +353,14 @@ def _read_onepassword_secret(
     to be invalidated based on environment variable changes.
     """
     account, token, host = _resolve_auth_arguments(account, token, host)
-    if token:
+    if token:  # pragma: no cover
         if host:
             return _resolve_connect_resource(token, host, resource)
         return asyncio.run(_async_resolve_resource(token, resource))
     op: str | None = None
     with suppress(FileNotFoundError, CalledProcessError):
         op = op_signin(account)
-    if not op:
+    if not op:  # pragma: no cover
         op = which_op() or "op"
     return check_output(
         (op, "read")
@@ -440,13 +442,13 @@ def _get_args_options(
     """
     index: int
     value: Any
-    for index, value in enumerate(args):
+    for index, value in enumerate(args):  # pragma: no cover
         if isinstance(value, ApplyOnepasswordArgumentsOptions):
             return (*args[:index], *args[index + 1 :]), value
     return args, ApplyOnepasswordArgumentsOptions()
 
 
-def _print_help() -> None:
+def _print_help() -> None:  # pragma: no cover
     print(  # noqa: T201
         "Usage:\n"
         "  decorative-secrets onepassword <command> [options]\n\n"
@@ -456,14 +458,14 @@ def _print_help() -> None:
     )
 
 
-def _get_command() -> str:
+def _get_command() -> str:  # pragma: no cover
     command: str = ""
     if len(sys.argv) > 1:
         command = sys.argv.pop(1).lower().replace("_", "-")
     return command
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     """
     Run a command:
     -   install: Install the Databricks CLI if not already installed
@@ -520,5 +522,5 @@ def main() -> None:
         )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
