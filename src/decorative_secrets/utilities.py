@@ -81,16 +81,13 @@ def get_logger(
             queue_handler.listener = log_queue_listener
         queue_handler.setLevel(level)
         if formatter is not None:
-            if stream_handler is None:
-                pass
-            else:
-                stream_handler.setFormatter(
-                    logging.Formatter(formatter)
-                    if isinstance(formatter, str)
-                    else formatter()
-                    if isinstance(formatter, type)
-                    else formatter
-                )
+            stream_handler.setFormatter(
+                logging.Formatter(formatter)
+                if isinstance(formatter, str)
+                else formatter()
+                if isinstance(formatter, type)
+                else formatter
+            )
         logger.addHandler(queue_handler)
         log_queue_listener.start()
         atexit.register(log_queue_listener.stop)
