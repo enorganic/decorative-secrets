@@ -120,7 +120,7 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
             "OP_SERVICE_ACCOUNT_TOKEN",
             read_onepassword_secret(
                 f"op://{onepassword_vault}/"
-                "62u4plbr2i7ueb4boywtbbyd24/credential"
+                "t4s43shaaab22aj36nmw56royy/credential"
             ),
         )
         assert (
