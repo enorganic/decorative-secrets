@@ -7,7 +7,7 @@ import signal
 import sys
 import threading
 from collections.abc import Awaitable, Callable, Iterable, Iterator
-from functools import partial, wraps
+from functools import cache, partial, wraps
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from time import sleep
@@ -48,7 +48,7 @@ def get_logger(
         log: logging.Logger = get_logger(
             __name__,
             formatter="%(asctime)s [%(levelname)s] %(message)s",
-            file=sys.stdout,
+            stream=sys.stdout,
         )
         ```
     """
@@ -97,7 +97,9 @@ def get_logger(
     return logger
 
 
-log: logging.Logger = get_logger(__name__)
+@cache
+def _get_log() -> logging.Logger:
+    return get_logger(__name__)
 
 
 def iscoroutinefunction(function: Any) -> bool:
@@ -624,7 +626,7 @@ def _run_with_thread_timeout(  # noqa: C901
                     error = raised
                     completed.set()
             if late:
-                log.warning(
+                _get_log().warning(
                     "%s, but the abandoned call subsequently raised %s: %s",
                     message,
                     type(raised).__name__,
