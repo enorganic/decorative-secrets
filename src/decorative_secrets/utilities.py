@@ -20,7 +20,7 @@ def get_logger(
     name: str | None = None,
     level: int | None = None,
     formatter: logging.Formatter | type[logging.Formatter] | str | None = None,
-    file: TextIO | Path | str | None = None,
+    stream: TextIO | Path | str | None = None,
     *,
     propagate: bool = True,
 ) -> logging.Logger:
@@ -37,7 +37,7 @@ def get_logger(
             format string.
         propagate: Whether the logger should propagate messages to the root
             logger.
-        file: A file-like object or path to write the log to.
+        stream: A file-like object or path to write the log to.
 
     Example:
         ```python
@@ -64,29 +64,33 @@ def get_logger(
         logger.propagate = propagate
         log_queue: queue.Queue = queue.Queue(-1)
         log_queue_listener: QueueListener
-        if file is not None:
-            if isinstance(file, str | Path):
-                file = open(file, "w")  # noqa: SIM115
-                atexit.register(file.close)
-            stream_handler: logging.StreamHandler = logging.StreamHandler(file)
-            stream_handler.setLevel(level)
-            log_queue_listener = QueueListener(
-                log_queue, stream_handler, respect_handler_level=True
-            )
+        stream_handler: logging.StreamHandler
+        if stream is not None:
+            if isinstance(stream, str | Path):
+                stream = open(stream, "w")  # noqa: SIM115
+                atexit.register(stream.close)
+            stream_handler = logging.StreamHandler(stream)
         else:
-            log_queue_listener = QueueListener(log_queue)
+            stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(level)
+        log_queue_listener = QueueListener(
+            log_queue, stream_handler, respect_handler_level=True
+        )
         queue_handler: QueueHandler = QueueHandler(log_queue)
         if hasattr(queue_handler, "listener"):
             queue_handler.listener = log_queue_listener
         queue_handler.setLevel(level)
         if formatter is not None:
-            stream_handler.setFormatter(
-                logging.Formatter(formatter)
-                if isinstance(formatter, str)
-                else formatter()
-                if isinstance(formatter, type)
-                else formatter
-            )
+            if stream_handler is None:
+                pass
+            else:
+                stream_handler.setFormatter(
+                    logging.Formatter(formatter)
+                    if isinstance(formatter, str)
+                    else formatter()
+                    if isinstance(formatter, type)
+                    else formatter
+                )
         logger.addHandler(queue_handler)
         log_queue_listener.start()
         atexit.register(log_queue_listener.stop)

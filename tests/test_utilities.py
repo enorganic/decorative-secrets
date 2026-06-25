@@ -541,7 +541,7 @@ def test_get_logger_with_stream_and_string_formatter() -> None:
         "test_get_logger_stream",
         level=logging.INFO,
         formatter="LEVEL=%(levelname)s MSG=%(message)s",
-        file=stream,
+        stream=stream,
     )
     logger.info("hello")
     assert "LEVEL=INFO MSG=hello" in stream_until(stream, "hello")
@@ -556,7 +556,7 @@ def test_get_logger_with_formatter_instance() -> None:
         "test_get_logger_formatter_instance",
         level=logging.INFO,
         formatter=logging.Formatter("INSTANCE:%(message)s"),
-        file=stream,
+        stream=stream,
     )
     logger.info("payload")
     assert "INSTANCE:payload" in stream_until(stream, "payload")
@@ -576,7 +576,7 @@ def test_get_logger_with_formatter_type() -> None:
         "test_get_logger_formatter_type",
         level=logging.INFO,
         formatter=PrefixFormatter,
-        file=stream,
+        stream=stream,
     )
     logger.info("payload")
     assert "TYPE:payload" in stream_until(stream, "payload")
@@ -592,7 +592,7 @@ def test_get_logger_with_path(tmp_path: Path) -> None:
         "test_get_logger_path",
         level=logging.INFO,
         formatter="%(message)s",
-        file=str(log_path),
+        stream=str(log_path),
     )
     logger.info("to-file")
     for _ in range(200):
