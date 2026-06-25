@@ -4,9 +4,6 @@ import sys
 from contextlib import suppress
 
 import pytest
-from onepassword.errors import (  # type: ignore[import-untyped]
-    RateLimitExceededException,
-)
 
 from decorative_secrets.environment import apply_environment_arguments
 from decorative_secrets.errors import (
@@ -66,22 +63,10 @@ def test_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
     """
-    try:
-        assert read_onepassword_secret(
-            f"op://{onepassword_vault}/Databricks Client/hostname",
-            account="my.1password.com",
-        )
-    except RateLimitExceededException:
-        # TODO: Remove this pending approval of
-        # [this](https://github.com/1Password/for-open-source/issues/1337)
-        pass
-    except Exception:
-        # TODO: Remove this pending approval of
-        # [this](https://github.com/1Password/for-open-source/issues/1337)
-        if not (
-            "rate limit exceeded" in get_exception_text() and os.getenv("CI")
-        ):
-            raise
+    assert read_onepassword_secret(
+        f"op://{onepassword_vault}/Databricks Client/hostname",
+        account="my.1password.com",
+    )
 
 
 def test_apply_onepassword_arguments(onepassword_vault: str) -> None:

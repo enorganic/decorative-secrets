@@ -3,9 +3,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 from databricks.sdk.errors.platform import ResourceDoesNotExist
-from onepassword.errors import (  # type: ignore[import-untyped]
-    RateLimitExceededException,
-)
 from pyspark import cloudpickle
 
 from decorative_secrets.databricks import (
@@ -15,7 +12,6 @@ from decorative_secrets.databricks import (
     get_databricks_secret,
     get_databricks_workspace_client,
 )
-from decorative_secrets.utilities import get_exception_text
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -52,18 +48,6 @@ def test_get_secret(databricks_env: dict[str, str]) -> None:
                 )
                 == "my-secret-value"
             )
-        except RateLimitExceededException:
-            # TODO: Remove this pending approval of
-            # [this](https://github.com/1Password/for-open-source/issues/1337)
-            pass
-        except Exception:
-            # TODO: Remove this pending approval of
-            # [this](https://github.com/1Password/for-open-source/issues/1337)
-            if not (
-                "rate limit exceeded" in get_exception_text()
-                and os.getenv("CI")
-            ):
-                raise
         finally:
             os.environ.clear()
             os.environ.update(env)
