@@ -443,6 +443,8 @@ def databricks_auth_login(
     host: str | None = None,
     profile: str | None = None,
     target: str | None = None,
+    *,
+    force: bool = False,
 ) -> None:  # pragma: no cover
     """
     Log in to Databricks using the CLI if not already logged in.
@@ -451,13 +453,14 @@ def databricks_auth_login(
         host: A Databricks workspace host URL.
         profile: A Databricks Configuration Profile.
         target: A Databricks CLI target.
+        force: Whether to force login even if already authenticated.
     """
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
-    # with suppress(CalledProcessError):
-    # If we are already authenticated, don't attempt to log in again
-    if (
+    # If we are already authenticated and not forcing login, don't attempt to
+    # log in again
+    if not force and (
         _databricks_auth_describe(
             host=host,
             profile=profile,
