@@ -34,7 +34,12 @@ if TYPE_CHECKING:
     from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
-    from databricks.sdk.oauth import AuthorizationDetail
+
+    AuthorizationDetail = Any
+    with suppress(ImportError):
+        from databricks.sdk.oauth import (  # type: ignore[attr-defined,no-redef]
+            AuthorizationDetail,
+        )
 
 
 # region Make workspace clients pickleable (in most scenarios)

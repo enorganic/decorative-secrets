@@ -241,9 +241,7 @@ def _parse_resource(resource: str) -> tuple[str, str, str]:
     return (parse_result.netloc, *parse_result.path[1:].partition("/")[::2])
 
 
-async def _async_resolve_resource(
-    token: str, resource: str
-) -> str:
+async def _async_resolve_resource(token: str, resource: str) -> str:
     """
     Asynchronously resolve a 1Password resource using the
     `onepassword-sdk` library.

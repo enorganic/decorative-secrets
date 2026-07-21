@@ -46,3 +46,14 @@ requests, however you will need to fork this project, push changes
 to your fork, and create a pull request from your forked repository.
 
 ## Conventions
+
+- Annotate local variables explicitly, not just function signatures —
+  see any module under `src/decorative_secrets/` for examples.
+- Tests exercising a real external resource (Databricks CLI/workspace,
+  1Password CLI/vault/Connect, Homebrew, WinGet, network installers) must
+  be genuine integration tests against the real thing — no mocking those
+  systems. See the `databricks_env`/`onepassword_vault` fixtures in
+  `tests/conftest.py`.
+- Save specs to `docs/superpowers/specs/YYYY-MM-DD-<branch>-design.md` and
+  implementation plans to `docs/superpowers/plans/YYYY-MM-DD-<branch>.md`.
+- Save (local) code review write-ups to `.review/<branch>.md`.
