@@ -1,0 +1,21 @@
+{
+  "extraKnownMarketplaces": {
+    "superpowers-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers-marketplace"
+      }
+    },
+    "fableplan": {
+      "source": {
+        "source": "github",
+        "repo": "bapttiste73/fableplan",
+        "sha": "82cb203526c16079014ac5c4e8407547918e7a8c"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "fableplan@fableplan": true
+  }
+}
