@@ -180,9 +180,9 @@ def _require_valid_databricks_profile() -> _DatabricksAuthProfile:
     )
 
 
-def _require_two_valid_databricks_profiles() -> (
-    tuple[_DatabricksAuthProfile, _DatabricksAuthProfile]
-):
+def _require_two_valid_databricks_profiles() -> tuple[
+    _DatabricksAuthProfile, _DatabricksAuthProfile
+]:
     """
     Return two distinct, valid, already-authenticated local profiles, or
     skip if fewer than two exist.
@@ -322,9 +322,7 @@ def test_databricks_auth_login_force_reauthenticates() -> None:
         "so this can only be run supervised, outside CI."
     ),
 )
-def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> (
-    None
-):
+def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> None:
     """
     `_databricks_auth_login.cache_clear()` wipes the entire cache, not just
     the entry for the forced profile. Confirm an unrelated, already-cached
