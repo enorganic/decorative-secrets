@@ -16,8 +16,13 @@ from decorative_secrets.onepassword import (
     _resolve_auth_arguments,
     apply_onepassword_arguments,
     async_read_onepassword_secret,
+    iter_op_account_list,
+    op_signin,
     read_onepassword_secret,
     which_op,
+)
+from decorative_secrets.onepassword import (
+    main as onepassword_main,
 )
 from decorative_secrets.subprocess import check_output
 from decorative_secrets.utilities import get_exception_text
@@ -47,6 +52,38 @@ def test_install_op() -> None:
         assert check_output((op, "--version"))
 
 
+def test_iter_op_account_list() -> None:
+    """
+    `iter_op_account_list` yields the real configured 1Password account(s).
+    """
+    accounts: list[str] = list(iter_op_account_list())
+    assert accounts
+
+
+def test_op_signin_no_account_iterates_all_accounts() -> None:
+    """
+    With no explicit account and `OP_ACCOUNT` unset, `op_signin` signs in
+    to at least one real account and returns a usable `op` path.
+    """
+    env: dict[str, str] = os.environ.copy()
+    try:
+        os.environ.pop("OP_ACCOUNT", None)
+        op: str = op_signin()
+        assert check_output((op, "--version"))
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
+
+
+def test_op_signin_with_explicit_account() -> None:
+    """
+    Passing an explicit account signs in to that account specifically.
+    """
+    account: str = next(iter(iter_op_account_list()))
+    op: str = op_signin(account)
+    assert check_output((op, "--version"))
+
+
 def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
     """
     Verify that the async_read_onepassword_secret function works as intended.
@@ -55,6 +92,26 @@ def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
         async_read_onepassword_secret(
             f"op://{onepassword_vault}/Databricks Client/hostname",
             account="enorganic.1password.com",
+        )
+    )
+
+
+def test_async_read_onepassword_secret_via_sdk_token(
+    onepassword_vault: str,
+) -> None:
+    """
+    With a service-account `token` passed and no `host`,
+    `async_read_onepassword_secret` resolves the secret via the
+    `onepassword-sdk` client rather than the CLI.
+    """
+    token: str = read_onepassword_secret(
+        f"op://{onepassword_vault}/t4s43shaaab22aj36nmw56royy/credential",
+        account="enorganic.1password.com",
+    )
+    assert asyncio.run(
+        async_read_onepassword_secret(
+            f"op://{onepassword_vault}/Databricks Client/hostname",
+            token=token,
         )
     )
 
@@ -199,6 +256,46 @@ def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
     finally:
         os.environ.clear()
         os.environ.update(env)
+
+
+def test_onepassword_cli_get_command(
+    capsys: pytest.CaptureFixture[str],
+    onepassword_vault: str,
+) -> None:
+    """
+    The `get` CLI subcommand prints the same value as calling
+    `read_onepassword_secret` directly.
+    """
+    reference: str = f"op://{onepassword_vault}/Databricks Client/hostname"
+    argv: list[str] = sys.argv
+    try:
+        sys.argv = [
+            "decorative-secrets-onepassword",
+            "get",
+            reference,
+            "--account",
+            "enorganic.1password.com",
+        ]
+        onepassword_main()
+    finally:
+        sys.argv = argv
+    assert capsys.readouterr().out.strip() == read_onepassword_secret(
+        reference, account="enorganic.1password.com"
+    )
+
+
+def test_onepassword_cli_install_command() -> None:
+    """
+    The `install` CLI subcommand installs the 1Password CLI (idempotent
+    when it's already installed).
+    """
+    argv: list[str] = sys.argv
+    try:
+        sys.argv = ["decorative-secrets-onepassword", "install"]
+        with suppress(OnePasswordCommandLineInterfaceNotInstalledError):
+            onepassword_main()
+    finally:
+        sys.argv = argv
 
 
 def test_resolve_auth_arguments() -> None:

@@ -130,6 +130,30 @@ def test_callback_applied_to_parameter_default() -> None:
     assert return_value() == 10
 
 
+def test_callback_argument_dropped_when_target_explicit() -> None:
+    """
+    When the target parameter is already supplied explicitly, the callback
+    is never invoked, and the corresponding lookup argument is dropped
+    rather than passed through to the wrapped function.
+    """
+    calls: list[int] = []
+
+    def callback(value: int) -> int:
+        calls.append(value)
+        return value * 2
+
+    @apply_callback_arguments(callback, x="x_lookup_arg")
+    def return_value(
+        x: int,
+        x_lookup_arg: int | None = None,
+    ) -> int:
+        assert x_lookup_arg is None
+        return x
+
+    assert return_value(x=5, x_lookup_arg=99) == 5
+    assert calls == []
+
+
 def test_callback_error_on_default_is_swallowed_when_default_exists() -> None:
     """
     If the callback raises while resolving a parameter that has its own

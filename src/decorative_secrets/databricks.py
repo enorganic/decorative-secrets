@@ -290,7 +290,7 @@ def _get_host_profile(
     host = host.lower()
     auth_profile: _DatabricksAuthProfile
     for auth_profile in _databricks_auth_profiles()["profiles"]:
-        if auth_profile.get("host", "").lower() == host:  # pragma: no cover
+        if auth_profile.get("host", "").lower() == host:
             return auth_profile.get("name")
     return None
 
@@ -316,11 +316,11 @@ def _databricks_auth_describe(
     ):  # pragma: no cover
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
-    if host and not profile:  # pragma: no cover
+    if host and not profile:
         profile = _get_host_profile(host)
     databricks: str = which_databricks()
     output: str
-    if host or profile or target:  # pragma: no cover
+    if host or profile or target:
         output = check_output(
             (
                 databricks,
@@ -396,7 +396,7 @@ def _databricks_auth_login(
     profile: str | None = None,
     target: str | None = None,
     **env: Any,
-) -> None:  # pragma: no cover
+) -> None:
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
@@ -445,7 +445,7 @@ def databricks_auth_login(
     target: str | None = None,
     *,
     force: bool = False,
-) -> None:  # pragma: no cover
+) -> None:
     """
     Log in to Databricks using the CLI if not already logged in.
 
@@ -469,6 +469,8 @@ def databricks_auth_login(
         == "success"
     ):
         return
+    if force:
+        _databricks_auth_login.cache_clear()
     return _databricks_auth_login(
         host=host, profile=profile, target=target, **os.environ
     )
@@ -685,7 +687,7 @@ def get_dbutils(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
-) -> RemoteDbUtils:  # pragma: no cover - environment dependent
+) -> RemoteDbUtils:
     """
     Get [dbutils](https://docs.databricks.com/dev-tools/databricks-utils.html)
     using an existing instance from the runtime if found, otherwise,
