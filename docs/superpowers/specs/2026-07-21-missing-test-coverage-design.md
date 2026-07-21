@@ -38,15 +38,32 @@ profile also evicts (and causes transparent re-population of) any other
 cached profile's state. That side effect needs its own test rather than
 being assumed correct.
 
+None of these functions have their own fixture-provisioned Databricks CLI
+profile — they depend on `~/.databrickscfg` already having at least one
+configured profile. This project's CI never runs `databricks auth login`
+or `databricks configure` (it only sets `DATABRICKS_CLIENT_ID`/`_SECRET`/
+`_HOST` for direct OAuth M2M auth via the SDK), so `databricks auth
+profiles -o json` returns an empty list there. Tests in this section must
+skip (not assume a profile exists) when the local profile list is empty or
+has no `valid` entry, rather than crashing.
+
 - `test_databricks_auth_login_force_reauthenticates` — using real
   credentials (`databricks_env`), call `databricks_auth_login(profile=...)`
   once, then again with `force=True`. Assert observable evidence of a
   second real CLI round-trip (e.g. wall-clock duration comparable to an
   actual `databricks auth login` call rather than a near-instant cache hit,
   and/or a changed mtime on the relevant `~/.databrickscfg` profile entry).
+  A status/`_databricks_auth_describe`-based assertion is not sufficient
+  here: it reads real on-disk CLI state, not the Python-level cache, so it
+  can't distinguish a cache hit from a fresh login and would pass even if
+  `cache_clear()` were removed entirely.
 - `test_databricks_auth_login_force_clears_cache_for_other_profiles` —
-  cache two profiles, force-relogin one, and assert the other still works
-  (re-runs and re-populates rather than erroring).
+  cache two profiles, force-relogin one, and prove the other's cache entry
+  was evicted too via the same wall-clock-timing approach as the sibling
+  test above (a repeat call for the untouched profile must take real-login
+  time, not cache-hit time, after the other profile's forced relogin). The
+  same status/describe-based pitfall applies here — that approach cannot
+  detect whether the Python-level cache was actually cleared.
 - `test_databricks_auth_login_skips_when_already_authenticated` — with
   `force=False` (default) and a profile already authenticated, confirm no
   fresh login is attempted (fast return).
@@ -132,6 +149,18 @@ explicitly supplied. This branch has no test:
 - `test_callback_argument_dropped_when_target_explicit` — call a decorated
   function with both `x=5` and `x_lookup_arg=...` set. Assert the callback
   is never invoked and the explicit value wins.
+
+## Known issue found during implementation (not a missing-test gap)
+
+`_install_op` (`src/decorative_secrets/onepassword.py:145`) maps any
+`brew install 1password-cli` failure on macOS — including the common
+already-installed case — to `OnePasswordCommandLineInterfaceNotInstalledError`.
+The existing `test_install_op` and the new `test_onepassword_cli_install_command`
+both suppress that exception rather than asserting correct idempotent
+behavior, so neither would catch a real regression here. This is a
+pre-existing source characteristic, not something introduced while closing
+these test gaps, and fixing it means redesigning `_install_op`'s error
+handling — out of scope for this spec. Flagged for a separate follow-up.
 
 ## Already adequately covered — no action needed
 

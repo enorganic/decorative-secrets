@@ -63,13 +63,18 @@ def test_iter_op_account_list() -> None:
 def test_op_signin_no_account_iterates_all_accounts() -> None:
     """
     With no explicit account and `OP_ACCOUNT` unset, `op_signin` signs in
-    to at least one real account and returns a usable `op` path.
+    to at least one real account and returns a usable `op` path. `--version`
+    doesn't require being signed in at all, so this checks `op vault list`
+    for each known account instead, since that command fails without a
+    valid session.
     """
     env: dict[str, str] = os.environ.copy()
     try:
         os.environ.pop("OP_ACCOUNT", None)
         op: str = op_signin()
-        assert check_output((op, "--version"))
+        account: str
+        for account in iter_op_account_list():
+            check_output((op, "vault", "list", "--account", account))
     finally:
         os.environ.clear()
         os.environ.update(env)
@@ -78,10 +83,13 @@ def test_op_signin_no_account_iterates_all_accounts() -> None:
 def test_op_signin_with_explicit_account() -> None:
     """
     Passing an explicit account signs in to that account specifically.
+    `--version` doesn't require being signed in at all, so this checks
+    `op vault list` for that account instead, since that command fails
+    without a valid session.
     """
     account: str = next(iter(iter_op_account_list()))
     op: str = op_signin(account)
-    assert check_output((op, "--version"))
+    check_output((op, "vault", "list", "--account", account))
 
 
 def test_async_read_onepassword_secret(onepassword_vault: str) -> None:
