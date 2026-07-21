@@ -1,4 +1,8 @@
 {
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "fableplan@fableplan": true
+  },
   "extraKnownMarketplaces": {
     "superpowers-marketplace": {
       "source": {
@@ -9,13 +13,8 @@
     "fableplan": {
       "source": {
         "source": "github",
-        "repo": "bapttiste73/fableplan",
-        "sha": "82cb203526c16079014ac5c4e8407547918e7a8c"
+        "repo": "bapttiste73/fableplan"
       }
     }
-  },
-  "enabledPlugins": {
-    "superpowers@superpowers-marketplace": true,
-    "fableplan@fableplan": true
   }
 }

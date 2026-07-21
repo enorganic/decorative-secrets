@@ -243,7 +243,7 @@ def _parse_resource(resource: str) -> tuple[str, str, str]:
 
 async def _async_resolve_resource(
     token: str, resource: str
-) -> str:  # pragma: no cover
+) -> str:
     """
     Asynchronously resolve a 1Password resource using the
     `onepassword-sdk` library.
@@ -323,7 +323,7 @@ async def async_read_onepassword_secret(
         The resolved secret value.
     """
     account, token, host = _resolve_auth_arguments(account, token, host)
-    if token:  # pragma: no cover
+    if token:
         if host:
             return await _async_resolve_connect_resource(token, host, resource)
         return await _async_resolve_resource(token, resource)

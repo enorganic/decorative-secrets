@@ -14,6 +14,7 @@ import pytest
 from decorative_secrets._utilities import (
     install_brew,
     which_brew,
+    which_winget,
 )
 from decorative_secrets.errors import (
     HomebrewNotInstalledError,
@@ -38,6 +39,15 @@ def test_install_brew() -> None:
             install_brew()
             brew: str = which_brew()
             assert check_output((brew, "--version"))
+
+
+def test_which_winget() -> None:
+    """
+    Verify that WinGet can be located on Windows.
+    """
+    if sys.platform.startswith("win"):
+        winget: str = which_winget()
+        assert check_output((winget, "--version"))
 
 
 def test_check_output() -> None:

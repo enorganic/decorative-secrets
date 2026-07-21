@@ -44,3 +44,5 @@
 If you are not a contributor on this project, you can still create pull
 requests, however you will need to fork this project, push changes
 to your fork, and create a pull request from your forked repository.
+
+## Conventions
