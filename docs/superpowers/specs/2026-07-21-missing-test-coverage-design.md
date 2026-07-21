@@ -42,10 +42,14 @@ None of these functions have their own fixture-provisioned Databricks CLI
 profile — they depend on `~/.databrickscfg` already having at least one
 configured profile. This project's CI never runs `databricks auth login`
 or `databricks configure` (it only sets `DATABRICKS_CLIENT_ID`/`_SECRET`/
-`_HOST` for direct OAuth M2M auth via the SDK), so `databricks auth
-profiles -o json` returns an empty list there. Tests in this section must
-skip (not assume a profile exists) when the local profile list is empty or
-has no `valid` entry, rather than crashing.
+`_HOST` for direct OAuth M2M auth via the SDK). With no `~/.databrickscfg`
+at all, `databricks auth profiles -o json` **exits non-zero** there — it
+does not return an empty list. Tests in this section must catch
+`subprocess.CalledProcessError` around that call (not just check for an
+empty/invalid-only result) and skip rather than crash. (Confirmed against
+a real CI failure: https://github.com/enorganic/decorative-secrets/actions/runs/29863219875 —
+an initial implementation that only handled the empty-list case still
+failed in CI.)
 
 - `test_databricks_auth_login_force_reauthenticates` — using real
   credentials (`databricks_env`), call `databricks_auth_login(profile=...)`
@@ -102,6 +106,14 @@ Only exercised indirectly through `get_databricks_secret`.
   assert it exposes a working `.secrets.get(...)`.
 
 ## P1 — 1Password: `op_signin` / `iter_op_account_list` (0% direct coverage)
+
+This project's CI only authenticates 1Password via `OP_SERVICE_ACCOUNT_TOKEN`
+— it never runs an interactive `op signin`, so `op account list` (and
+therefore `iter_op_account_list()`) legitimately yields nothing there. Tests
+in this section must skip when there are no interactively-registered
+accounts, rather than asserting on or indexing into an empty list
+(confirmed against the same CI run referenced above: an initial
+implementation without this guard failed there).
 
 - `test_iter_op_account_list` — assert the real configured 1Password
   account(s) are yielded.
