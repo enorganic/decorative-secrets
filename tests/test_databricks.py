@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from subprocess import CalledProcessError
 from time import monotonic
 from typing import TYPE_CHECKING
 
@@ -152,11 +153,17 @@ def _require_databricks_profiles() -> list[_DatabricksAuthProfile]:
     Return the locally configured Databricks CLI profiles, or skip if none
     exist (e.g. on a CI runner that only authenticates via
     `DATABRICKS_CLIENT_ID`/`DATABRICKS_CLIENT_SECRET` and never runs
-    `databricks auth login`, so no profile is ever registered).
+    `databricks auth login`, so no profile is ever registered). With no
+    `~/.databrickscfg` at all, `databricks auth profiles -o json` exits
+    non-zero rather than returning an empty list, so that has to be caught
+    too, not just an empty result.
     """
-    profiles: list[_DatabricksAuthProfile] = _databricks_auth_profiles()[
-        "profiles"
-    ]
+    try:
+        profiles: list[_DatabricksAuthProfile] = _databricks_auth_profiles()[
+            "profiles"
+        ]
+    except CalledProcessError:
+        profiles = []
     if not profiles:
         pytest.skip(
             "Requires at least one Databricks CLI profile configured "

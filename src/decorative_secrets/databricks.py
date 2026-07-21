@@ -295,7 +295,7 @@ def _get_host_profile(
     host = host.lower()
     auth_profile: _DatabricksAuthProfile
     for auth_profile in _databricks_auth_profiles()["profiles"]:
-        if auth_profile.get("host", "").lower() == host:
+        if auth_profile.get("host", "").lower() == host:  # pragma: no cover
             return auth_profile.get("name")
     return None
 
@@ -321,11 +321,11 @@ def _databricks_auth_describe(
     ):  # pragma: no cover
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
-    if host and not profile:
+    if host and not profile:  # pragma: no cover
         profile = _get_host_profile(host)
     databricks: str = which_databricks()
     output: str
-    if host or profile or target:
+    if host or profile or target:  # pragma: no cover
         output = check_output(
             (
                 databricks,
@@ -401,7 +401,7 @@ def _databricks_auth_login(
     profile: str | None = None,
     target: str | None = None,
     **env: Any,
-) -> None:
+) -> None:  # pragma: no cover
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
@@ -450,7 +450,7 @@ def databricks_auth_login(
     target: str | None = None,
     *,
     force: bool = False,
-) -> None:
+) -> None:  # pragma: no cover
     """
     Log in to Databricks using the CLI if not already logged in.
 

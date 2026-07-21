@@ -52,12 +52,28 @@ def test_install_op() -> None:
         assert check_output((op, "--version"))
 
 
+def _require_op_accounts() -> list[str]:
+    """
+    Return the interactively-registered 1Password account(s) (from
+    `op account list`), or skip if there are none. A service-account-token
+    -only environment (e.g. this project's CI, which only sets
+    `OP_SERVICE_ACCOUNT_TOKEN`) never registers an account this way, so
+    `iter_op_account_list()` legitimately yields nothing there.
+    """
+    accounts: list[str] = list(iter_op_account_list())
+    if not accounts:
+        pytest.skip(
+            "Requires at least one interactively signed-in 1Password "
+            "account configured locally."
+        )
+    return accounts
+
+
 def test_iter_op_account_list() -> None:
     """
     `iter_op_account_list` yields the real configured 1Password account(s).
     """
-    accounts: list[str] = list(iter_op_account_list())
-    assert accounts
+    assert _require_op_accounts()
 
 
 def test_op_signin_no_account_iterates_all_accounts() -> None:
@@ -68,12 +84,13 @@ def test_op_signin_no_account_iterates_all_accounts() -> None:
     for each known account instead, since that command fails without a
     valid session.
     """
+    accounts: list[str] = _require_op_accounts()
     env: dict[str, str] = os.environ.copy()
     try:
         os.environ.pop("OP_ACCOUNT", None)
         op: str = op_signin()
         account: str
-        for account in iter_op_account_list():
+        for account in accounts:
             check_output((op, "vault", "list", "--account", account))
     finally:
         os.environ.clear()
@@ -87,7 +104,7 @@ def test_op_signin_with_explicit_account() -> None:
     `op vault list` for that account instead, since that command fails
     without a valid session.
     """
-    account: str = next(iter(iter_op_account_list()))
+    account: str = _require_op_accounts()[0]
     op: str = op_signin(account)
     check_output((op, "vault", "list", "--account", account))
 
