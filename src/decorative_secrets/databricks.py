@@ -1008,14 +1008,14 @@ def _print_help() -> None:  # pragma: no cover
     )
 
 
-def _get_command() -> str:  # pragma: no cover
+def _get_command() -> str:
     command: str = ""
     if len(sys.argv) > 1:
         command = sys.argv.pop(1).lower().replace("_", "-")
     return command
 
 
-def main() -> None:  # pragma: no cover
+def main() -> None:
     """
     Run a command:
     -   install: Install the Databricks CLI if not already installed
