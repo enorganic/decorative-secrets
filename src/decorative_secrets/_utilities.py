@@ -32,7 +32,7 @@ HOMEBREW_INSTALL_SH: str = (
 )
 
 
-def install_brew() -> None:
+def install_brew(*, timeout: float | None = None) -> None:
     """
     Install Homebrew on macOS or linux if not already installed.
     """
@@ -46,6 +46,7 @@ def install_brew() -> None:
             check_output(
                 (bash, "-c", response_io.read()),
                 env=env,
+                timeout=timeout,
             )
         except CalledProcessError as error:
             # This is usually because the script requires `sudo` access to run
@@ -53,16 +54,16 @@ def install_brew() -> None:
 
 
 @cache
-def which_brew() -> str:
+def which_brew(*, timeout: float | None = None) -> str:
     """
     Find the `brew` executable on macOS, or install Homebrew if not found.
     """
     brew: str | None
     brew = which("brew") or "brew"
     try:
-        check_output((brew, "--version"))
+        check_output((brew, "--version"), timeout=timeout)
     except (CalledProcessError, FileNotFoundError):
-        install_brew()
+        install_brew(timeout=timeout)
         brew = which("brew")
         if not brew:
             if sys.platform == "darwin":
@@ -74,20 +75,20 @@ def which_brew() -> str:
                 if not os.path.exists(brew):
                     brew = "brew"
         try:
-            check_output((brew, "--version"))
+            check_output((brew, "--version"), timeout=timeout)
         except (CalledProcessError, FileNotFoundError) as error:
             raise HomebrewNotInstalledError from error
     return brew
 
 
 @cache
-def which_winget() -> str | None:
+def which_winget(*, timeout: float | None = None) -> str | None:
     """
     Find the `winget` executable on Windows, or raise an error if not found.
     """
     winget: str = which("winget") or "winget"
     try:
-        check_output((winget, "--version"))
+        check_output((winget, "--version"), timeout=timeout)
     except (CalledProcessError, FileNotFoundError) as error:
         raise WinGetNotInstalledError from error
     else:
@@ -202,6 +203,21 @@ def unwrap_function(
     while hasattr(function, "__wrapped__"):
         function = function.__wrapped__
     return function
+
+
+@as_dict
+def get_prefixed_environ(*prefixes: str) -> Iterable[tuple[str, str]]:
+    """
+    Return the subset of `os.environ` whose variable names start with one
+    of `prefixes`, for use as cache-key-widening `**kwargs` — narrower
+    than splatting the entire environment, but still cache-busts whenever
+    a variable actually relevant to the operation changes.
+    """
+    key: str
+    value: str
+    for key, value in os.environ.items():
+        if key.startswith(prefixes):
+            yield key, value
 
 
 _FUNCTIONS_ERRORS: dict[int, dict[str, list[str]]] = {}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from functools import wraps
 from inspect import Signature, signature
 from typing import Any
@@ -11,6 +12,7 @@ from decorative_secrets._utilities import (
     asyncio_run,
     get_errors,
     get_function_signature_applicable_args_kwargs,
+    get_prefixed_environ,
     get_running_loop,
     get_signature_parameter_names_defaults,
     merge_function_signature_args_kwargs,
@@ -224,6 +226,51 @@ def test_get_errors_distinct_per_function() -> None:
 
     get_errors(first)["a"] = ["x"]
     assert "a" not in get_errors(second)
+
+
+def test_get_prefixed_environ_single_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Only variables matching the given prefix are returned.
+    """
+    monkeypatch.setattr(
+        os,
+        "environ",
+        {"DATABRICKS_HOST": "host", "UNRELATED": "x"},
+    )
+    assert get_prefixed_environ("DATABRICKS_") == {"DATABRICKS_HOST": "host"}
+
+
+def test_get_prefixed_environ_multiple_prefixes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Variables matching any of several prefixes are returned together.
+    """
+    monkeypatch.setattr(
+        os,
+        "environ",
+        {
+            "DATABRICKS_HOST": "host",
+            "OP_ACCOUNT": "account",
+            "UNRELATED": "x",
+        },
+    )
+    assert get_prefixed_environ("DATABRICKS_", "OP_") == {
+        "DATABRICKS_HOST": "host",
+        "OP_ACCOUNT": "account",
+    }
+
+
+def test_get_prefixed_environ_no_match_returns_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    When nothing matches the given prefix, an empty dict is returned.
+    """
+    monkeypatch.setattr(os, "environ", {"UNRELATED": "x"})
+    assert get_prefixed_environ("NOPE_") == {}
 
 
 if __name__ == "__main__":

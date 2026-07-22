@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 from contextlib import suppress
+from subprocess import TimeoutExpired
 
 import pytest
 
@@ -11,8 +12,11 @@ from decorative_secrets.errors import (
     OnePasswordCommandLineInterfaceNotInstalledError,
 )
 from decorative_secrets.onepassword import (
+    ApplyOnepasswordArgumentsOptions,
     _install_op,
+    _op_signin,
     _parse_resource,
+    _read_onepassword_secret,
     _resolve_auth_arguments,
     apply_onepassword_arguments,
     async_read_onepassword_secret,
@@ -40,6 +44,14 @@ def test_which_op() -> None:
         # Windows, but not Linux
         if sys.platform.startswith(("darwin", "win32")):
             raise
+
+
+def test_which_op_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `which_op` to raise `TimeoutExpired`.
+    """
+    with pytest.raises(TimeoutExpired):
+        which_op(timeout=1e-6)
 
 
 def test_install_op() -> None:
@@ -74,6 +86,42 @@ def test_iter_op_account_list() -> None:
     `iter_op_account_list` yields the real configured 1Password account(s).
     """
     assert _require_op_accounts()
+
+
+def test_iter_op_account_list_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `iter_op_account_list` to raise
+    `TimeoutExpired`.
+    """
+    _require_op_accounts()
+    with pytest.raises(TimeoutExpired):
+        list(iter_op_account_list(timeout=1e-6))
+
+
+def test_op_signin_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `op_signin` to raise `TimeoutExpired`.
+    """
+    account: str = _require_op_accounts()[0]
+    with pytest.raises(TimeoutExpired):
+        op_signin(account, timeout=1e-6)
+
+
+def test_op_signin_timeout_cache_key() -> None:
+    """
+    Distinct `timeout` values are distinct `_op_signin` cache keys: each
+    triggers its own real CLI round-trip (a cache miss), while repeating
+    the same `timeout` hits cache.
+    """
+    account: str = _require_op_accounts()[0]
+    _op_signin.cache_clear()
+    _op_signin(account, timeout=None)
+    misses_after_first: int = _op_signin.cache_info().misses
+    _op_signin(account, timeout=30)
+    misses_after_second: int = _op_signin.cache_info().misses
+    assert misses_after_second == misses_after_first + 1
+    _op_signin(account, timeout=30)
+    assert _op_signin.cache_info().misses == misses_after_second
 
 
 def test_op_signin_no_account_iterates_all_accounts() -> None:
@@ -149,6 +197,97 @@ def test_read_onepassword_secret(onepassword_vault: str) -> None:
         f"op://{onepassword_vault}/Databricks Client/hostname",
         account="enorganic.1password.com",
     )
+
+
+def test_read_onepassword_secret_timeout_expires(
+    onepassword_vault: str,
+) -> None:
+    """
+    A near-zero `timeout` causes `read_onepassword_secret` to raise
+    `TimeoutExpired` when resolving via the CLI.
+    """
+    with pytest.raises(TimeoutExpired):
+        read_onepassword_secret(
+            f"op://{onepassword_vault}/Databricks Client/hostname",
+            account="enorganic.1password.com",
+            timeout=1e-6,
+        )
+
+
+def test_async_read_onepassword_secret_timeout_expires(
+    onepassword_vault: str,
+) -> None:
+    """
+    A near-zero `timeout` causes `async_read_onepassword_secret` to raise
+    `TimeoutExpired` when resolving via the CLI.
+    """
+    with pytest.raises(TimeoutExpired):
+        asyncio.run(
+            async_read_onepassword_secret(
+                f"op://{onepassword_vault}/Databricks Client/hostname",
+                account="enorganic.1password.com",
+                timeout=1e-6,
+            )
+        )
+
+
+def test_read_onepassword_secret_ignores_unrelated_env_changes(
+    onepassword_vault: str,
+) -> None:
+    """
+    Changing an environment variable unrelated to 1Password does not bust
+    `read_onepassword_secret`'s cache, while changing an `OP_`-prefixed
+    variable does.
+    """
+    resource: str = f"op://{onepassword_vault}/Databricks Client/hostname"
+    env: dict[str, str] = os.environ.copy()
+    try:
+        _read_onepassword_secret.cache_clear()
+        read_onepassword_secret(resource, account="enorganic.1password.com")
+        misses_after_first: int = _read_onepassword_secret.cache_info().misses
+        os.environ["DECORATIVE_SECRETS_TEST_UNRELATED"] = "1"
+        read_onepassword_secret(resource, account="enorganic.1password.com")
+        assert _read_onepassword_secret.cache_info().misses == (
+            misses_after_first
+        )
+        os.environ["OP_TEST_UNRELATED"] = "2"
+        read_onepassword_secret(resource, account="enorganic.1password.com")
+        assert _read_onepassword_secret.cache_info().misses == (
+            misses_after_first + 1
+        )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
+
+
+def test_apply_onepassword_arguments_timeout_expires(
+    onepassword_vault: str,
+) -> None:
+    """
+    A `timeout` set on `ApplyOnepasswordArgumentsOptions` reaches the
+    underlying secret lookup, surfacing as an `ArgumentsResolutionError`
+    (wrapping the `TimeoutExpired`) the same way other callback failures
+    propagate through `apply_callback_arguments`.
+    """
+
+    @apply_onepassword_arguments(
+        ApplyOnepasswordArgumentsOptions(
+            account="enorganic.1password.com", timeout=1e-6
+        ),
+        my_secret="my_secret_onepassword",
+    )
+    def get_my_secret(
+        my_secret: str,
+        my_secret_onepassword: str | None = None,  # noqa: ARG001
+    ) -> str:
+        return my_secret
+
+    with pytest.raises(ArgumentsResolutionError):
+        get_my_secret(
+            my_secret_onepassword=(
+                f"op://{onepassword_vault}/Databricks Client/hostname"
+            )
+        )
 
 
 def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
