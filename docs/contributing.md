@@ -60,16 +60,5 @@ to your fork, and create a pull request from your forked repository.
   before assuming a regression.
 - Save specs to `docs/superpowers/specs/YYYY-MM-DD-<branch>-design.md` and
   implementation plans to `docs/superpowers/plans/YYYY-MM-DD-<branch>.md`.
-- Optional operational parameters on public functions (e.g. `timeout`)
-  must be keyword-only and, where they bound a real network/subprocess
-  call (CLI-based authentication, secret retrieval), default to a finite
-  value (e.g. `timeout: float | None = 60`) rather than an unbounded
-  default — see `databricks.py`/`onepassword.py` for the pattern. Private
-  helpers may default such parameters to `None` (no timeout) since they
-  always receive an explicit value forwarded from their public caller.
-- When widening a `functools.cache`/`alru_cache` key with environment
-  variables so the cache invalidates on relevant env changes, filter to
-  the applicable prefix (e.g. `get_prefixed_environ("DATABRICKS_")` in
-  `_utilities.py`) rather than splatting all of `os.environ` — narrower
-  cache keys, and it stays correct even for env vars an external
-  SDK/CLI consults that this codebase never names directly.
+  When coding with an agent, this is _required_ (for transparency of
+  instruction)—otherwise, use your discretion.
