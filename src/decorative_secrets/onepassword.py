@@ -24,6 +24,7 @@ from onepasswordconnectsdk.client import (  # type: ignore[import-untyped]
 )
 
 from decorative_secrets._utilities import (  # type: ignore[import-untyped]
+    get_prefixed_environ,
     which_brew,
     which_winget,
 )
@@ -122,18 +123,29 @@ def apply_onepassword_arguments(
         (options.account is not None)
         or (options.token is not None)
         or (options.host is not None)
+        or (options.timeout is not None)
     ):  # pragma: no cover
         read_onepassword_secret_ = partial(
             read_onepassword_secret_,
             **({"account": options.account} if options.account else {}),
             **({"token": options.token} if options.token else {}),
             **({"host": options.host} if options.host else {}),
+            **(
+                {"timeout": options.timeout}
+                if options.timeout is not None
+                else {}
+            ),
         )
         async_read_onepassword_secret_ = partial(
             async_read_onepassword_secret_,
             **({"account": options.account} if options.account else {}),
             **({"token": options.token} if options.token else {}),
             **({"host": options.host} if options.host else {}),
+            **(
+                {"timeout": options.timeout}
+                if options.timeout is not None
+                else {}
+            ),
         )
     return apply_callback_arguments(
         read_onepassword_secret_,
@@ -142,14 +154,17 @@ def apply_onepassword_arguments(
     )
 
 
-def _install_op() -> None:
+def _install_op(*, timeout: float | None = None) -> None:
     """
     Install the 1Password CLI.
     """
     message: str
     if sys.platform.startswith("win"):  # pragma: no cover
         try:
-            check_output((which_winget(), "install", "1password-cli"))
+            check_output(
+                (which_winget(timeout=timeout), "install", "1password-cli"),
+                timeout=timeout,
+            )
         except (
             CalledProcessError,
             FileNotFoundError,
@@ -158,60 +173,72 @@ def _install_op() -> None:
             raise OnePasswordCommandLineInterfaceNotInstalledError from error
     elif sys.platform == "darwin":  # pragma: no cover
         try:
-            check_output((which_brew(), "install", "1password-cli"))
+            check_output(
+                (which_brew(timeout=timeout), "install", "1password-cli"),
+                timeout=timeout,
+            )
         except (CalledProcessError, FileNotFoundError) as error:
             raise OnePasswordCommandLineInterfaceNotInstalledError from error
     else:  # pragma: no cover
         raise OnePasswordCommandLineInterfaceNotInstalledError
 
 
-def which_op() -> str:
+def which_op(*, timeout: float | None = 60) -> str:
     """
     Locate the 1Password CLI executable, or attempt
     to install it if not found.
     """
     op: str = which("op") or "op"
     try:
-        check_output((op, "--version"))
+        check_output((op, "--version"), timeout=timeout)
     except (CalledProcessError, FileNotFoundError):  # pragma: no cover
-        _install_op()
+        _install_op(timeout=timeout)
         op = which("op") or "op"
     return op
 
 
 @cache
-def _op_signin(account: str | None = None) -> str:
-    op: str = which_op()
+def _op_signin(
+    account: str | None = None, *, timeout: float | None = None
+) -> str:
+    op: str = which_op(timeout=timeout)
     if not account:  # pragma: no cover
         account = os.getenv("OP_ACCOUNT")
     check_output(
         (op, "signin", "--account", account) if account else (op, "signin"),
         input=None if account else b"\n\n",
+        timeout=timeout,
     )
     return op
 
 
-def iter_op_account_list() -> Iterable[str]:
+def iter_op_account_list(*, timeout: float | None = 60) -> Iterable[str]:
     """
     Yield all 1password account names.
     """
-    op: str = which_op()
+    op: str = which_op(timeout=timeout)
     line: str
-    for line in check_output((op, "account", "list")).strip().split("\n")[1:]:
+    for line in (
+        check_output((op, "account", "list"), timeout=timeout)
+        .strip()
+        .split("\n")[1:]
+    ):
         yield line.partition(" ")[0]
 
 
-def op_signin(account: str | None = None) -> str:
+def op_signin(
+    account: str | None = None, *, timeout: float | None = 60
+) -> str:
     """
     Sign in to 1Password using the CLI if not already signed in.
     """
     account = account or os.getenv("OP_ACCOUNT")
     if account:
-        return _op_signin(account)
+        return _op_signin(account, timeout=timeout)
     op: str | None = None
-    for account in iter_op_account_list():
-        op = _op_signin(account)
-    return op or which_op()
+    for account in iter_op_account_list(timeout=timeout):
+        op = _op_signin(account, timeout=timeout)
+    return op or which_op(timeout=timeout)
 
 
 def _resolve_auth_arguments(
@@ -299,6 +326,8 @@ async def async_read_onepassword_secret(
     account: str | None = None,
     token: str | None = None,
     host: str | None = None,
+    *,
+    timeout: float | None = 60,
 ) -> str:
     """
     Asynchronously read a secret from 1Password using either the
@@ -316,6 +345,8 @@ async def async_read_onepassword_secret(
         token: A 1Password or 1Password connect service account token.
         host: A 1Password Connect host URL. This is required when using
             self-hosted 1Password Connect.
+        timeout: A timeout in seconds for any underlying `op` CLI
+            invocation.
 
     Returns:
         The resolved secret value.
@@ -327,14 +358,15 @@ async def async_read_onepassword_secret(
         return await _async_resolve_resource(token, resource)
     op: str | None = None
     with suppress(FileNotFoundError, CalledProcessError):
-        op = op_signin(account)
+        op = op_signin(account, timeout=timeout)
     if not op:  # pragma: no cover
-        op = which_op() or "op"
+        op = which_op(timeout=timeout) or "op"
     return check_output(
         (op, "read")
         + (("--account", account) if account else ())
         + (("--session", token) if token else ())
-        + (resource,)
+        + (resource,),
+        timeout=timeout,
     )
 
 
@@ -344,6 +376,8 @@ def _read_onepassword_secret(
     account: str | None = None,
     token: str | None = None,
     host: str | None = None,
+    *,
+    timeout: float | None = None,
     **env: str,  # noqa: ARG001
 ) -> str:
     """
@@ -357,14 +391,15 @@ def _read_onepassword_secret(
         return asyncio.run(_async_resolve_resource(token, resource))
     op: str | None = None
     with suppress(FileNotFoundError, CalledProcessError):
-        op = op_signin(account)
+        op = op_signin(account, timeout=timeout)
     if not op:  # pragma: no cover
-        op = which_op() or "op"
+        op = which_op(timeout=timeout) or "op"
     return check_output(
         (op, "read")
         + (("--account", account) if account else ())
         + (("--session", token) if token else ())
-        + (resource,)
+        + (resource,),
+        timeout=timeout,
     )
 
 
@@ -373,6 +408,8 @@ def get_onepassword_secret(
     account: str | None = None,
     token: str | None = None,
     host: str | None = None,
+    *,
+    timeout: float | None = 60,
 ) -> str:
     """
     Read a secret from 1Password using either the `onepassword-sdk` or
@@ -389,12 +426,19 @@ def get_onepassword_secret(
         token: A 1Password or 1Password connect service account token.
         host: A 1Password Connect host URL. This is required when using
             self-hosted 1Password Connect.
+        timeout: A timeout in seconds for any underlying `op` CLI
+            invocation.
 
     Returns:
         The resolved secret value.
     """
     return _read_onepassword_secret(
-        resource, account=account, token=token, host=host, **os.environ
+        resource,
+        account=account,
+        token=token,
+        host=host,
+        timeout=timeout,
+        **get_prefixed_environ("OP_"),
     )
 
 
@@ -424,11 +468,14 @@ class ApplyOnepasswordArgumentsOptions:
             provided, the `OP_CONNECT_HOST` environment variable will be used,
             if set. This is required when using a self-hosted 1Password
             Connect server.
+        timeout: A timeout in seconds for any underlying `op` CLI
+            invocation.
     """
 
     account: str | None = None
     token: str | None = None
     host: str | None = None
+    timeout: float | None = None
 
 
 def _get_args_options(
@@ -479,8 +526,14 @@ def main() -> None:
             prog="decorative-secrets onepassword install",
             description="Install the 1Password CLI",
         )
-        parser.parse_args()
-        _install_op()
+        parser.add_argument(
+            "--timeout",
+            default=None,
+            type=float,
+            help="A timeout, in seconds, for the install command",
+        )
+        namespace: argparse.Namespace = parser.parse_args()
+        _install_op(timeout=namespace.timeout)
     elif command == "get":
         parser = argparse.ArgumentParser(
             prog="decorative-secrets onepassword get",
@@ -509,13 +562,21 @@ def main() -> None:
             type=str,
             help="A 1Password Connect Host URL",
         )
-        namespace: argparse.Namespace = parser.parse_args()
+        parser.add_argument(
+            "--timeout",
+            default=60,
+            type=float,
+            help="A timeout, in seconds, for any underlying `op` CLI "
+            "invocation",
+        )
+        namespace = parser.parse_args()
         print(  # noqa: T201
             read_onepassword_secret(
                 namespace.reference,
                 host=namespace.host,
                 account=namespace.account,
                 token=namespace.token,
+                timeout=namespace.timeout,
             )
         )
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, TimeoutExpired
 from time import monotonic
 from typing import TYPE_CHECKING
 
@@ -10,11 +10,15 @@ import pytest
 from databricks.sdk.errors.platform import ResourceDoesNotExist
 from pyspark import cloudpickle
 
+from decorative_secrets._utilities import get_prefixed_environ
 from decorative_secrets.databricks import (
+    DatabricksWorkspaceClientArguments,
     _databricks_auth_describe,
     _databricks_auth_login,
     _databricks_auth_profiles,
+    _get_env_databricks_workspace_client,
     _get_host_profile,
+    _get_secret,
     _install_databricks_cli,
     _install_sh_databricks_cli,
     apply_databricks_secrets_arguments,
@@ -27,6 +31,7 @@ from decorative_secrets.databricks import (
 from decorative_secrets.databricks import (
     main as databricks_main,
 )
+from decorative_secrets.errors import ArgumentsResolutionError
 from decorative_secrets.subprocess import check_output
 
 if TYPE_CHECKING:
@@ -120,6 +125,95 @@ def test_apply_databricks_secret_arguments(
         os.environ.update(env)
 
 
+def test_get_databricks_secret_ignores_unrelated_env_changes(
+    databricks_env: dict[str, str],
+) -> None:
+    """
+    Changing an environment variable unrelated to Databricks does not bust
+    `get_databricks_secret`'s cache, while changing a `DATABRICKS_`-prefixed
+    variable does.
+    """
+    env: Mapping[str, str] = os.environ.copy()
+    try:
+        os.environ.update(databricks_env)
+        _get_secret.cache_clear()
+        get_databricks_secret("decorative-secrets-test", "my-secret-key")
+        misses_after_first: int = _get_secret.cache_info().misses
+        os.environ["DECORATIVE_SECRETS_TEST_UNRELATED"] = "1"
+        get_databricks_secret("decorative-secrets-test", "my-secret-key")
+        assert _get_secret.cache_info().misses == misses_after_first
+        os.environ["DATABRICKS_TEST_UNRELATED"] = "2"
+        get_databricks_secret("decorative-secrets-test", "my-secret-key")
+        assert _get_secret.cache_info().misses == misses_after_first + 1
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
+
+
+def test_get_databricks_secret_timeout_expires() -> None:
+    """
+    A near-zero `timeout` reaches the implicit CLI-based auth check and
+    raises `TimeoutExpired`, when no client credentials are available to
+    bypass it entirely.
+    """
+    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    env: Mapping[str, str] = os.environ.copy()
+    try:
+        os.environ.pop("DATABRICKS_CLIENT_ID", None)
+        os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
+        _get_secret.cache_clear()
+        _get_env_databricks_workspace_client.cache_clear()
+        with pytest.raises(TimeoutExpired):
+            get_databricks_secret(
+                "decorative-secrets-test",
+                "my-secret-key",
+                profile=profile["name"],
+                timeout=1e-6,
+            )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
+
+
+def test_apply_databricks_secrets_arguments_timeout_expires() -> None:
+    """
+    A `timeout` set on `DatabricksWorkspaceClientArguments` reaches the
+    underlying secret lookup, surfacing as an `ArgumentsResolutionError`
+    (wrapping the `TimeoutExpired`) the same way other callback failures
+    propagate through `apply_callback_arguments`.
+    """
+    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    env: Mapping[str, str] = os.environ.copy()
+
+    @apply_databricks_secrets_arguments(
+        DatabricksWorkspaceClientArguments(
+            profile=profile["name"], timeout=1e-6
+        ),
+        my_secret="my_secret_databricks_secret",
+    )
+    def get_my_secret(
+        my_secret: str,
+        my_secret_databricks_secret: str | None = None,  # noqa: ARG001
+    ) -> str:
+        return my_secret
+
+    try:
+        os.environ.pop("DATABRICKS_CLIENT_ID", None)
+        os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
+        _get_secret.cache_clear()
+        _get_env_databricks_workspace_client.cache_clear()
+        with pytest.raises(ArgumentsResolutionError):
+            get_my_secret(
+                my_secret_databricks_secret=(
+                    "decorative-secrets-test",
+                    "my-secret-key",
+                )
+            )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
+
+
 def test_pickle_workspace_client() -> None:
     client: WorkspaceClient = get_databricks_workspace_client()
     me: User = client.current_user.me()
@@ -146,6 +240,15 @@ def test_which_databricks() -> None:
     """
     databricks: str = which_databricks()
     assert check_output((databricks, "--version"))
+
+
+def test_which_databricks_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `which_databricks` to raise
+    `TimeoutExpired`.
+    """
+    with pytest.raises(TimeoutExpired):
+        which_databricks(timeout=1e-6)
 
 
 def _require_databricks_profiles() -> list[_DatabricksAuthProfile]:
@@ -218,6 +321,32 @@ def test_databricks_auth_profiles() -> None:
     )
 
 
+def test_databricks_auth_profiles_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `_databricks_auth_profiles` to raise
+    `TimeoutExpired`.
+    """
+    with pytest.raises(TimeoutExpired):
+        _databricks_auth_profiles(timeout=1e-6)
+
+
+def test_databricks_auth_profiles_timeout_cache_key() -> None:
+    """
+    Distinct `timeout` values are distinct `_databricks_auth_profiles`
+    cache keys: each triggers its own real CLI round-trip (a cache miss),
+    while repeating the same `timeout` hits cache.
+    """
+    _require_databricks_profiles()
+    _databricks_auth_profiles.cache_clear()
+    _databricks_auth_profiles(timeout=None)
+    misses_after_first: int = _databricks_auth_profiles.cache_info().misses
+    _databricks_auth_profiles(timeout=30)
+    misses_after_second: int = _databricks_auth_profiles.cache_info().misses
+    assert misses_after_second == misses_after_first + 1
+    _databricks_auth_profiles(timeout=30)
+    assert _databricks_auth_profiles.cache_info().misses == misses_after_second
+
+
 def test_get_host_profile() -> None:
     """
     A configured profile's host resolves back to its profile name.
@@ -236,6 +365,16 @@ def test_databricks_auth_describe() -> None:
         _databricks_auth_describe(profile=profile["name"]).get("status")
         == "success"
     )
+
+
+def test_databricks_auth_describe_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `_databricks_auth_describe` to raise
+    `TimeoutExpired`.
+    """
+    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    with pytest.raises(TimeoutExpired):
+        _databricks_auth_describe(profile=profile["name"], timeout=1e-6)
 
 
 def test_databricks_auth_login_skips_when_already_authenticated() -> None:
@@ -281,6 +420,17 @@ def test_databricks_auth_login_env_fallback() -> None:
         os.environ.update(env)
 
 
+def test_databricks_auth_login_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `databricks_auth_login` to raise
+    `TimeoutExpired`, via its internal `_databricks_auth_describe` status
+    check, before any interactive login is ever attempted.
+    """
+    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    with pytest.raises(TimeoutExpired):
+        databricks_auth_login(profile=profile["name"], timeout=1e-6)
+
+
 @pytest.mark.skipif(
     bool(os.getenv("CI")),
     reason=(
@@ -305,15 +455,22 @@ def test_databricks_auth_login_force_reauthenticates() -> None:
     """
     profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     # Match the exact cache key `databricks_auth_login` uses internally
-    # (`**os.environ` is part of the key), so seeding this entry actually
-    # collides with the one `force=True` must evict below.
+    # (`**get_prefixed_environ("DATABRICKS_")` is part of the key), so
+    # seeding this entry actually collides with the one `force=True` must
+    # evict below.
     _databricks_auth_login.cache_clear()
     _databricks_auth_login(
-        host=None, profile=profile["name"], target=None, **os.environ
+        host=None,
+        profile=profile["name"],
+        target=None,
+        **get_prefixed_environ("DATABRICKS_"),
     )
     start: float = monotonic()
     _databricks_auth_login(
-        host=None, profile=profile["name"], target=None, **os.environ
+        host=None,
+        profile=profile["name"],
+        target=None,
+        **get_prefixed_environ("DATABRICKS_"),
     )
     cached_call_seconds: float = monotonic() - start
     start = monotonic()
@@ -341,24 +498,37 @@ def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> None:
     second: _DatabricksAuthProfile
     first, second = _require_two_valid_databricks_profiles()
     # Match the exact cache key `databricks_auth_login` uses internally
-    # (`**os.environ` is part of the key), so seeding these entries
-    # actually collides with what `force=True` must evict below.
+    # (`**get_prefixed_environ("DATABRICKS_")` is part of the key), so
+    # seeding these entries actually collides with what `force=True` must
+    # evict below.
     _databricks_auth_login.cache_clear()
     _databricks_auth_login(
-        host=None, profile=first["name"], target=None, **os.environ
+        host=None,
+        profile=first["name"],
+        target=None,
+        **get_prefixed_environ("DATABRICKS_"),
     )
     _databricks_auth_login(
-        host=None, profile=second["name"], target=None, **os.environ
+        host=None,
+        profile=second["name"],
+        target=None,
+        **get_prefixed_environ("DATABRICKS_"),
     )
     start: float = monotonic()
     _databricks_auth_login(
-        host=None, profile=second["name"], target=None, **os.environ
+        host=None,
+        profile=second["name"],
+        target=None,
+        **get_prefixed_environ("DATABRICKS_"),
     )
     cached_call_seconds: float = monotonic() - start
     databricks_auth_login(profile=first["name"], force=True)
     start = monotonic()
     _databricks_auth_login(
-        host=None, profile=second["name"], target=None, **os.environ
+        host=None,
+        profile=second["name"],
+        target=None,
+        **get_prefixed_environ("DATABRICKS_"),
     )
     after_force_call_seconds: float = monotonic() - start
     assert after_force_call_seconds > (cached_call_seconds * 10)

@@ -49,6 +49,7 @@ def check_output(
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
     shell: bool = False,
+    timeout: float | None = None,
     echo: bool = False,
 ) -> str: ...
 
@@ -63,6 +64,7 @@ def check_output(
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
     shell: bool = False,
+    timeout: float | None = None,
     echo: bool = False,
 ) -> bytes: ...
 
@@ -77,6 +79,7 @@ def check_output(
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
     shell: bool = False,
+    timeout: float | None = None,
     echo: bool = False,
 ) -> str: ...
 
@@ -90,6 +93,7 @@ def check_output(  # noqa: C901
     env: Mapping[str, str] | None = None,
     suppress_stderr: bool = True,
     shell: bool = False,
+    timeout: float | None = None,
     echo: bool = False,
 ) -> str | bytes | None:
     """
@@ -107,6 +111,11 @@ def check_output(  # noqa: C901
         echo: Whether to print the command and its output (default: False)
         suppress_stderr: Whether to prevent stderr from being printed to the
             console
+
+    Raises:
+        CalledProcessError: If the command returns a non-zero exit code
+        TimeoutExpired: If the command takes longer than `timeout` seconds to
+        complete
     """
     default_shell: str | None = get_default_shell() if shell else None
     args_: tuple[str, ...] | str = (
@@ -145,6 +154,7 @@ def check_output(  # noqa: C901
                     env=env,
                     text=text,
                     shell=shell_,
+                    timeout=timeout,
                 )
             except CalledProcessError as error:
                 stderr.seek(0)
@@ -160,6 +170,7 @@ def check_output(  # noqa: C901
             env=env,
             text=text,
             shell=shell_,
+            timeout=timeout,
         )
     output: str | bytes | None = None
     if text is None:
@@ -186,6 +197,7 @@ def check_call(
     suppress_stderr: bool = True,
     shell: bool = False,
     echo: bool = False,
+    timeout: float | None = None,
 ) -> None:
     """
     This function mimics `subprocess.check_call`, but redirects stderr
@@ -203,6 +215,12 @@ def check_call(
         shell: Whether to run the command in a shell
         suppress_stderr: Whether to prevent stderr from being printed to the
             console
+        timeout: The timeout in seconds for the command to complete
+
+    Raises:
+        CalledProcessError: If the command returns a non-zero exit code
+        TimeoutExpired: If the command takes longer than `timeout` seconds to
+        complete
     """
     check_output(
         args,
@@ -213,4 +231,5 @@ def check_call(
         suppress_stderr=suppress_stderr,
         shell=shell,
         echo=echo,
+        timeout=timeout,
     )

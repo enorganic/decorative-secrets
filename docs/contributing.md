@@ -53,7 +53,23 @@ to your fork, and create a pull request from your forked repository.
   1Password CLI/vault/Connect, Homebrew, WinGet, network installers) must
   be genuine integration tests against the real thing — no mocking those
   systems. See the `databricks_env`/`onepassword_vault` fixtures in
-  `tests/conftest.py`.
+  `tests/conftest.py`. These tests depend on live, interactive CLI
+  sessions (e.g. `op`'s biometric-unlock desktop integration), so an
+  occasional transient failure unrelated to your change (a `signin`
+  round-trip that needed a moment to authorize) is possible — re-run
+  before assuming a regression.
 - Save specs to `docs/superpowers/specs/YYYY-MM-DD-<branch>-design.md` and
   implementation plans to `docs/superpowers/plans/YYYY-MM-DD-<branch>.md`.
-- Save (local) code review write-ups to `.review/<branch>.md`.
+- Optional operational parameters on public functions (e.g. `timeout`)
+  must be keyword-only and, where they bound a real network/subprocess
+  call (CLI-based authentication, secret retrieval), default to a finite
+  value (e.g. `timeout: float | None = 60`) rather than an unbounded
+  default — see `databricks.py`/`onepassword.py` for the pattern. Private
+  helpers may default such parameters to `None` (no timeout) since they
+  always receive an explicit value forwarded from their public caller.
+- When widening a `functools.cache`/`alru_cache` key with environment
+  variables so the cache invalidates on relevant env changes, filter to
+  the applicable prefix (e.g. `get_prefixed_environ("DATABRICKS_")` in
+  `_utilities.py`) rather than splatting all of `os.environ` — narrower
+  cache keys, and it stays correct even for env vars an external
+  SDK/CLI consults that this codebase never names directly.

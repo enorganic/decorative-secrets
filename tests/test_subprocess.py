@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from contextlib import suppress
 from io import StringIO
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING, TextIO
 
 if TYPE_CHECKING:
@@ -48,6 +48,35 @@ def test_which_winget() -> None:
     if sys.platform.startswith("win"):
         winget: str = which_winget()
         assert check_output((winget, "--version"))
+
+
+def test_install_brew_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `install_brew` to raise `TimeoutExpired`
+    rather than `HomebrewNotInstalledError`, proving `timeout` reaches the
+    underlying `check_output` call.
+    """
+    if sys.platform == "darwin":
+        with pytest.raises(TimeoutExpired):
+            install_brew(timeout=1e-6)
+
+
+def test_which_brew_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `which_brew` to raise `TimeoutExpired`.
+    """
+    if sys.platform == "darwin":
+        with pytest.raises(TimeoutExpired):
+            which_brew(timeout=1e-6)
+
+
+def test_which_winget_timeout_expires() -> None:
+    """
+    A near-zero `timeout` causes `which_winget` to raise `TimeoutExpired`.
+    """
+    if sys.platform.startswith("win"):
+        with pytest.raises(TimeoutExpired):
+            which_winget(timeout=1e-6)
 
 
 def test_check_output() -> None:
@@ -146,6 +175,31 @@ def test_check_output_decodes_bytes_input_for_text_mode() -> None:
     before being passed to the subprocess, and the echoed output matches.
     """
     assert check_output(("cat",), input=b"payload", text=True) == "payload"
+
+
+def test_check_output_timeout_expires() -> None:
+    """
+    A `timeout` shorter than the command's runtime raises `TimeoutExpired`.
+    """
+    with pytest.raises(TimeoutExpired):
+        check_output(("sleep", "5"), timeout=0.1)
+
+
+def test_check_output_timeout_generous_succeeds() -> None:
+    """
+    A `timeout` longer than the command's runtime does not affect the
+    result.
+    """
+    assert check_output(("echo", "hello"), timeout=5) == "hello"
+
+
+def test_check_call_timeout_expires() -> None:
+    """
+    `check_call` forwards `timeout` to `check_output`, raising
+    `TimeoutExpired` when exceeded.
+    """
+    with pytest.raises(TimeoutExpired):
+        check_call(("sleep", "5"), timeout=0.1)
 
 
 def test_check_output_echo_with_cwd(

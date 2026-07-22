@@ -17,6 +17,7 @@ from urllib.request import urlopen
 from databricks.sdk import WorkspaceClient
 
 from decorative_secrets._utilities import (
+    get_prefixed_environ,
     which_brew,
     which_winget,
 )
@@ -120,6 +121,7 @@ class DatabricksWorkspaceClientArguments:
     credentials_strategy: CredentialsStrategy | None = None
     credentials_provider: CredentialsStrategy | None = None
     token_audience: str | None = None
+    timeout: float | None = 60
 
 
 def apply_databricks_secrets_arguments(
@@ -202,7 +204,7 @@ def apply_databricks_secrets_arguments(
     )
 
 
-def _install_sh_databricks_cli() -> None:
+def _install_sh_databricks_cli(*, timeout: float | None = None) -> None:
     """
     Install the Databricks CLI using the install script.
     """
@@ -212,7 +214,7 @@ def _install_sh_databricks_cli() -> None:
     ) as install_io:
         sh: str = which("sh") or "sh"
         try:
-            check_call((sh,), input=install_io.read())
+            check_call((sh,), input=install_io.read(), timeout=timeout)
         except (CalledProcessError, FileNotFoundError) as error:
             if (
                 (not isinstance(error, CalledProcessError))
@@ -227,17 +229,22 @@ def _install_sh_databricks_cli() -> None:
                 raise DatabricksCLINotInstalledError from error
 
 
-def _install_databricks_cli() -> None:
+def _install_databricks_cli(*, timeout: float | None = None) -> None:
     """
     Install the Databricks CLI.
     """
     if sys.platform.startswith("win"):  # pragma: no cover
-        winget: str | None = which_winget()
+        winget: str | None = which_winget(timeout=timeout)
         if winget:
             with suppress(CalledProcessError):
-                check_output((winget, "search", "DatabricksCLI"))
+                check_output(
+                    (winget, "search", "DatabricksCLI"), timeout=timeout
+                )
             with suppress(CalledProcessError):
-                check_output((winget, "install", "Databricks.DatabricksCLI"))
+                check_output(
+                    (winget, "install", "Databricks.DatabricksCLI"),
+                    timeout=timeout,
+                )
                 return
     elif sys.platform == "darwin":  # pragma: no cover
         brew: str
@@ -245,26 +252,30 @@ def _install_databricks_cli() -> None:
         # can still attempt to install the Databricks CLI using
         # the install script
         with suppress(HomebrewNotInstalledError):
-            brew = which_brew()
+            brew = which_brew(timeout=timeout)
             if brew:
                 with suppress(CalledProcessError):  # pragma: no cover
-                    check_output((brew, "tap", "databricks/tap"))
+                    check_output(
+                        (brew, "tap", "databricks/tap"), timeout=timeout
+                    )
                 with suppress(CalledProcessError):  # pragma: no cover
-                    check_output((brew, "install", "databricks"))
+                    check_output(
+                        (brew, "install", "databricks"), timeout=timeout
+                    )
                     return
-    _install_sh_databricks_cli()
+    _install_sh_databricks_cli(timeout=timeout)
 
 
-def which_databricks() -> str:
+def which_databricks(*, timeout: float | None = 60) -> str:
     """
     Find the `databricks` executable, or install the Databricks CLI if not
     found.
     """
     databricks: str = which("databricks") or "databricks"
     try:
-        check_output((databricks, "--version"))
+        check_output((databricks, "--version"), timeout=timeout)
     except (CalledProcessError, FileNotFoundError):  # pragma: no cover
-        _install_databricks_cli()
+        _install_databricks_cli(timeout=timeout)
         databricks = which("databricks") or "databricks"
     return databricks
 
@@ -291,22 +302,28 @@ class _DatabricksAuthDescription(TypedDict, total=False):
 @cache
 def _get_host_profile(
     host: str,
+    *,
+    timeout: float | None = None,
 ) -> str | None:
     host = host.lower()
     auth_profile: _DatabricksAuthProfile
-    for auth_profile in _databricks_auth_profiles()["profiles"]:
+    for auth_profile in _databricks_auth_profiles(timeout=timeout)["profiles"]:
         if auth_profile.get("host", "").lower() == host:  # pragma: no cover
             return auth_profile.get("name")
     return None
 
 
 @cache
-def _databricks_auth_profiles() -> _DatabricksAuthProfiles:
-    databricks: str = which_databricks()
+def _databricks_auth_profiles(
+    *,
+    timeout: float | None = None,
+) -> _DatabricksAuthProfiles:
+    databricks: str = which_databricks(timeout=timeout)
     return json.loads(
         check_output(
             (databricks, "auth", "profiles", "-o", "json"),
             input=b"\n\n",
+            timeout=timeout,
         )
     )
 
@@ -315,6 +332,8 @@ def _databricks_auth_describe(
     host: str | None = None,
     profile: str | None = None,
     target: str | None = None,
+    *,
+    timeout: float | None = None,
 ) -> _DatabricksAuthDescription:
     if (
         (host is None) and (profile is None) and (target is None)
@@ -322,8 +341,8 @@ def _databricks_auth_describe(
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
     if host and not profile:  # pragma: no cover
-        profile = _get_host_profile(host)
-    databricks: str = which_databricks()
+        profile = _get_host_profile(host, timeout=timeout)
+    databricks: str = which_databricks(timeout=timeout)
     output: str
     if host or profile or target:  # pragma: no cover
         output = check_output(
@@ -338,6 +357,7 @@ def _databricks_auth_describe(
                 *(("--target", target) if target else ()),
             ),
             input=b"\n\n",
+            timeout=timeout,
         )
     else:  # pragma: no cover
         # Automatically select the default/first profile if no host,
@@ -345,6 +365,7 @@ def _databricks_auth_describe(
         output = check_output(
             (databricks, "auth", "describe", "-o", "json"),
             input=b"\n\n",
+            timeout=timeout,
         )
     return json.loads(output)
 
@@ -352,8 +373,10 @@ def _databricks_auth_describe(
 def _databricks_bundle_summary(
     target: str,
     profile: str | None = None,
+    *,
+    timeout: float | None = None,
 ) -> dict[str, Any]:  # pragma: no cover
-    databricks: str = which_databricks()
+    databricks: str = which_databricks(timeout=timeout)
     output: str = check_output(
         (
             databricks,
@@ -366,17 +389,18 @@ def _databricks_bundle_summary(
             *(("-p", profile) if profile else ()),
         ),
         input=b"\n\n",
+        timeout=timeout,
     )
     return json.loads(output)
 
 
 def _databricks_auth_login_target(
-    target: str, **env: Any
+    target: str, *, timeout: float | None = None, **env: Any
 ) -> None:  # pragma: no cover
     lowercase_target: str | None = target.lower() if target else None
     profile: _DatabricksAuthProfile
     for profile in sorted(
-        _databricks_auth_profiles()["profiles"],
+        _databricks_auth_profiles(timeout=timeout)["profiles"],
         key=lambda profile: (
             0 if profile.get("name", "").lower() == lowercase_target else 1
         ),
@@ -386,8 +410,12 @@ def _databricks_auth_login_target(
         if not host:
             continue
         with suppress(CalledProcessError):
-            _databricks_auth_login(host=host, profile=name, **env)
-            _databricks_bundle_summary(target=target, profile=name)
+            _databricks_auth_login(
+                host=host, profile=name, timeout=timeout, **env
+            )
+            _databricks_bundle_summary(
+                target=target, profile=name, timeout=timeout
+            )
             return
 
 
@@ -400,14 +428,16 @@ def _databricks_auth_login(
     host: str | None = None,
     profile: str | None = None,
     target: str | None = None,
+    *,
+    timeout: float | None = None,
     **env: Any,
 ) -> None:  # pragma: no cover
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
         profile = os.getenv("DATABRICKS_CONFIG_PROFILE")
     if host and not profile:
-        profile = _get_host_profile(host)
-    databricks: str = which_databricks()
+        profile = _get_host_profile(host, timeout=timeout)
+    databricks: str = which_databricks(timeout=timeout)
     if host or profile or target:
         try:
             check_call(
@@ -420,28 +450,40 @@ def _databricks_auth_login(
                     *(("--target", target) if target else ()),
                 ),
                 input=b"\n\n",
+                timeout=timeout,
             )
         except CalledProcessError as error:
             if target:
                 error_message: str = error.stderr.decode()
                 if "https://" not in error_message:
-                    _databricks_auth_login_target(target=target)
+                    _databricks_auth_login_target(
+                        target=target, timeout=timeout
+                    )
                     return
                 # If any of the profile hosts are mentioned in the
                 # error message, attempts to authenticate using that
                 # profile
                 profile_: _DatabricksAuthProfile
-                for profile_ in _databricks_auth_profiles()["profiles"]:
+                for profile_ in _databricks_auth_profiles(timeout=timeout)[
+                    "profiles"
+                ]:
                     host_: str | None = profile_.get("host")
                     if host_ and (host_ in error_message):
                         name: str | None = profile_.get("name")
-                        _databricks_auth_login(profile=name, host=host_, **env)
+                        _databricks_auth_login(
+                            profile=name,
+                            host=host_,
+                            timeout=timeout,
+                            **env,
+                        )
                         return
             raise
     else:
         # Automatically select the default/first profile if no host,
         # profile, or target is specified
-        check_call((databricks, "auth", "login"), input=b"\n\n")
+        check_call(
+            (databricks, "auth", "login"), input=b"\n\n", timeout=timeout
+        )
 
 
 def databricks_auth_login(
@@ -450,6 +492,7 @@ def databricks_auth_login(
     target: str | None = None,
     *,
     force: bool = False,
+    timeout: float | None = 60,
 ) -> None:  # pragma: no cover
     """
     Log in to Databricks using the CLI if not already logged in.
@@ -459,6 +502,16 @@ def databricks_auth_login(
         profile: A Databricks Configuration Profile.
         target: A Databricks CLI target.
         force: Whether to force login even if already authenticated.
+        timeout: A timeout in seconds for the login operation.
+
+    Raises:
+        CalledProcessError: If the Databricks CLI command returns a non-zero
+            exit code
+        FileNotFoundError: If the Databricks CLI is not found.
+        DatabricksCLINotInstalledError: If the Databricks CLI cannot be
+            installed.
+        TimeoutExpired: If the command takes longer than `timeout` seconds to
+            complete
     """
     if (host is None) and (profile is None) and (target is None):
         host = os.getenv("DATABRICKS_HOST")
@@ -470,6 +523,7 @@ def databricks_auth_login(
             host=host,
             profile=profile,
             target=target,
+            timeout=timeout,
         ).get("status")
         == "success"
     ):
@@ -477,7 +531,11 @@ def databricks_auth_login(
     if force:
         _databricks_auth_login.cache_clear()
     return _databricks_auth_login(
-        host=host, profile=profile, target=target, **os.environ
+        host=host,
+        profile=profile,
+        target=target,
+        timeout=timeout,
+        **get_prefixed_environ("DATABRICKS_"),
     )
 
 
@@ -512,6 +570,7 @@ def _get_env_databricks_workspace_client(
     config: Config | None = None,
     scopes: list[str] | None = None,
     authorization_details: list[AuthorizationDetail] | None = None,
+    timeout: float | None = None,
     **env: str,  # noqa: ARG001
 ) -> WorkspaceClient:
     """
@@ -541,7 +600,7 @@ def _get_env_databricks_workspace_client(
             FileNotFoundError,
             DatabricksCLINotInstalledError,
         ):
-            databricks_auth_login(host=host, profile=profile)
+            databricks_auth_login(host=host, profile=profile, timeout=timeout)
     environ: Mapping[str, str] = os.environ.copy() if profile else os.environ
     try:
         if profile:  # pragma: no cover
@@ -629,6 +688,7 @@ def get_databricks_workspace_client(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
+    timeout: float | None = 60,
 ) -> WorkspaceClient:
     """
     Get a Databricks WorkspaceClient configured from environment variables.
@@ -660,7 +720,8 @@ def get_databricks_workspace_client(
         credentials_provider=credentials_provider,
         token_audience=token_audience,
         config=config,
-        **os.environ,
+        timeout=timeout,
+        **get_prefixed_environ("DATABRICKS_", "ARM_", "GOOGLE_"),
     )
 
 
@@ -692,6 +753,7 @@ def get_dbutils(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
+    timeout: float | None = 60,
 ) -> RemoteDbUtils:
     """
     Get [dbutils](https://docs.databricks.com/dev-tools/databricks-utils.html)
@@ -753,6 +815,7 @@ def get_dbutils(
             credentials_provider=credentials_provider,
             token_audience=token_audience,
             config=config,
+            timeout=timeout,
         )
     )
     return databricks_workspace_client.dbutils
@@ -789,6 +852,7 @@ def _get_secret(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
+    timeout: float | None = None,
     **env: str,  # noqa: ARG001
 ) -> str:
     """
@@ -822,6 +886,7 @@ def _get_secret(
         credentials_provider=credentials_provider,
         token_audience=token_audience,
         config=config,
+        timeout=timeout,
     ).secrets.get(scope, key)
 
 
@@ -855,6 +920,7 @@ def get_databricks_secret(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
+    timeout: float | None = 60,
 ) -> str:
     """
     Get a secret from Databricks.
@@ -889,6 +955,8 @@ def get_databricks_secret(
         credentials_provider: A credentials provider for the SDK.
         token_audience: A token audience for the SDK.
         config: A Databricks SDK Config instance.
+        timeout: A timeout in seconds for any underlying Databricks CLI
+            invocation (e.g. an implicit `databricks auth login`).
     """
     return _get_secret(
         scope,
@@ -919,7 +987,8 @@ def get_databricks_secret(
         credentials_provider=credentials_provider,
         token_audience=token_audience,
         config=config,
-        **os.environ,
+        timeout=timeout,
+        **get_prefixed_environ("DATABRICKS_", "ARM_", "GOOGLE_"),
     )
 
 
@@ -952,6 +1021,7 @@ def _get_scope_key_secret(
     credentials_provider: CredentialsStrategy | None = None,
     token_audience: str | None = None,
     config: Config | None = None,
+    timeout: float | None = None,
 ) -> str:
     if isinstance(scope_key, str):  # pragma: no cover
         scope_key = scope_key.partition("/")[::2]
@@ -983,6 +1053,7 @@ def _get_scope_key_secret(
         credentials_provider=credentials_provider,
         token_audience=token_audience,
         config=config,
+        timeout=timeout,
     )
 
 
@@ -1036,8 +1107,14 @@ def main() -> None:
             prog="decorative-secrets databricks install",
             description="Install the Databricks CLI",
         )
-        parser.parse_args()
-        _install_databricks_cli()
+        parser.add_argument(
+            "--timeout",
+            default=None,
+            type=float,
+            help="A timeout, in seconds, for the install command",
+        )
+        namespace: argparse.Namespace = parser.parse_args()
+        _install_databricks_cli(timeout=namespace.timeout)
     elif command == "get":
         parser = argparse.ArgumentParser(
             prog="decorative-secrets databricks get",
@@ -1085,7 +1162,14 @@ def main() -> None:
             type=str,
             help="A Databricks Configuration Profile",
         )
-        namespace: argparse.Namespace = parser.parse_args()
+        parser.add_argument(
+            "--timeout",
+            default=60,
+            type=float,
+            help="A timeout, in seconds, for any underlying Databricks CLI "
+            "invocation",
+        )
+        namespace = parser.parse_args()
         print(  # noqa: T201
             get_databricks_secret(
                 namespace.scope,
@@ -1095,6 +1179,7 @@ def main() -> None:
                 client_secret=namespace.client_secret,
                 token=namespace.token,
                 profile=namespace.profile,
+                timeout=namespace.timeout,
             )
         )
 
