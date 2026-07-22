@@ -199,6 +199,25 @@ def test_read_onepassword_secret(onepassword_vault: str) -> None:
     )
 
 
+def _clear_op_token_env() -> dict[str, str]:
+    """
+    Remove `OP_SERVICE_ACCOUNT_TOKEN`/`OP_CONNECT_TOKEN`/`OP_CONNECT_HOST`
+    from the environment and return a copy of the original environment for
+    restoration. `_resolve_auth_arguments` falls back to these when no
+    `token`/`host` is passed explicitly (e.g. this project's CI, which
+    authenticates via `OP_SERVICE_ACCOUNT_TOKEN`); when a token resolves,
+    `_read_onepassword_secret`/`async_read_onepassword_secret` take the
+    `onepassword-sdk` HTTP-client branch instead of the CLI branch, which
+    does not accept/enforce `timeout` at all. Tests asserting CLI-path
+    `timeout` behavior must force the CLI branch by clearing these first.
+    """
+    env: dict[str, str] = os.environ.copy()
+    os.environ.pop("OP_SERVICE_ACCOUNT_TOKEN", None)
+    os.environ.pop("OP_CONNECT_TOKEN", None)
+    os.environ.pop("OP_CONNECT_HOST", None)
+    return env
+
+
 def test_read_onepassword_secret_timeout_expires(
     onepassword_vault: str,
 ) -> None:
@@ -206,12 +225,17 @@ def test_read_onepassword_secret_timeout_expires(
     A near-zero `timeout` causes `read_onepassword_secret` to raise
     `TimeoutExpired` when resolving via the CLI.
     """
-    with pytest.raises(TimeoutExpired):
-        read_onepassword_secret(
-            f"op://{onepassword_vault}/Databricks Client/hostname",
-            account="enorganic.1password.com",
-            timeout=1e-6,
-        )
+    env: dict[str, str] = _clear_op_token_env()
+    try:
+        with pytest.raises(TimeoutExpired):
+            read_onepassword_secret(
+                f"op://{onepassword_vault}/Databricks Client/hostname",
+                account="enorganic.1password.com",
+                timeout=1e-6,
+            )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
 
 
 def test_async_read_onepassword_secret_timeout_expires(
@@ -221,14 +245,19 @@ def test_async_read_onepassword_secret_timeout_expires(
     A near-zero `timeout` causes `async_read_onepassword_secret` to raise
     `TimeoutExpired` when resolving via the CLI.
     """
-    with pytest.raises(TimeoutExpired):
-        asyncio.run(
-            async_read_onepassword_secret(
-                f"op://{onepassword_vault}/Databricks Client/hostname",
-                account="enorganic.1password.com",
-                timeout=1e-6,
+    env: dict[str, str] = _clear_op_token_env()
+    try:
+        with pytest.raises(TimeoutExpired):
+            asyncio.run(
+                async_read_onepassword_secret(
+                    f"op://{onepassword_vault}/Databricks Client/hostname",
+                    account="enorganic.1password.com",
+                    timeout=1e-6,
+                )
             )
-        )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
 
 
 def test_read_onepassword_secret_ignores_unrelated_env_changes(
@@ -282,12 +311,17 @@ def test_apply_onepassword_arguments_timeout_expires(
     ) -> str:
         return my_secret
 
-    with pytest.raises(ArgumentsResolutionError):
-        get_my_secret(
-            my_secret_onepassword=(
-                f"op://{onepassword_vault}/Databricks Client/hostname"
+    env: dict[str, str] = _clear_op_token_env()
+    try:
+        with pytest.raises(ArgumentsResolutionError):
+            get_my_secret(
+                my_secret_onepassword=(
+                    f"op://{onepassword_vault}/Databricks Client/hostname"
+                )
             )
-        )
+    finally:
+        os.environ.clear()
+        os.environ.update(env)
 
 
 def test_apply_onepassword_arguments(onepassword_vault: str) -> None:
