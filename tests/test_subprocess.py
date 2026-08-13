@@ -80,6 +80,36 @@ def test_which_winget_timeout_expires() -> None:
             which_winget(timeout=1e-6)
 
 
+_STDOUT_MARKER: str = "decorative-secrets-stdout-marker"
+_STDERR_MARKER: str = "decorative-secrets-stderr-marker"
+
+
+def _failing_command(script: str) -> tuple[str, ...]:
+    """
+    A command which runs `script` and exists on every supported platform.
+
+    `bash` can't be used for this: on the Windows CI runners `bash`
+    resolves to the WSL launcher (`C:\\Windows\\System32\\bash.exe`),
+    which exits non-zero with its own error before ever running the
+    script — so the command fails for the wrong reason, writing nothing
+    to stderr.
+    """
+    return (sys.executable, "-c", script)
+
+
+def _stderr_section(message: str) -> str:
+    """
+    The stderr which `CalledProcessError.__str__` appends, isolated from
+    the command/exit-code portion of the message.
+
+    Asserting a marker against the whole message would pass even when no
+    stderr was captured at all, because the command repr in that message
+    quotes the script — and therefore the marker — verbatim.
+    """
+    assert "Stderr:" in message
+    return message.split("Stderr:", 1)[1].strip()
+
+
 def test_check_call_suppresses_and_attaches_stderr(
     capfd: pytest.CaptureFixture[str],
 ) -> None:
@@ -89,14 +119,19 @@ def test_check_call_suppresses_and_attaches_stderr(
     `str(error)`.
     """
     with pytest.raises(CalledProcessError) as exc_info:
-        check_call(("bash", "-c", "echo oops >&2; exit 3"))
+        check_call(
+            _failing_command(
+                f"import sys; sys.stderr.write({_STDERR_MARKER!r}); "
+                f"sys.exit(3)"
+            )
+        )
     assert capfd.readouterr().err == ""
     error: CalledProcessError = exc_info.value
     assert isinstance(error, subprocess.CalledProcessError)
     assert isinstance(error.stderr, bytes)
-    assert b"oops" in error.stderr
+    assert _STDERR_MARKER.encode() in error.stderr
     assert error.returncode == 3
-    assert "oops" in str(error)
+    assert _stderr_section(str(error)) == _STDERR_MARKER
 
 
 def test_check_output_error_str_includes_stderr() -> None:
@@ -104,8 +139,13 @@ def test_check_output_error_str_includes_stderr() -> None:
     `check_output` includes captured stderr in `str(error)` on failure.
     """
     with pytest.raises(CalledProcessError) as exc_info:
-        check_output(("bash", "-c", "echo oops >&2; exit 1"))
-    assert "oops" in str(exc_info.value)
+        check_output(
+            _failing_command(
+                f"import sys; sys.stderr.write({_STDERR_MARKER!r}); "
+                f"sys.exit(1)"
+            )
+        )
+    assert _stderr_section(str(exc_info.value)) == _STDERR_MARKER
 
 
 def test_check_output_unsuppressed_error_str_includes_stderr() -> None:
@@ -115,10 +155,13 @@ def test_check_output_unsuppressed_error_str_includes_stderr() -> None:
     """
     with pytest.raises(CalledProcessError) as exc_info:
         check_output(
-            ("bash", "-c", "echo oops >&2; exit 1"),
+            _failing_command(
+                f"import sys; sys.stderr.write({_STDERR_MARKER!r}); "
+                f"sys.exit(1)"
+            ),
             suppress_stderr=False,
         )
-    assert "oops" in str(exc_info.value)
+    assert _stderr_section(str(exc_info.value)) == _STDERR_MARKER
 
 
 def test_check_output_error_output_remains_bytes() -> None:
@@ -129,27 +172,36 @@ def test_check_output_error_output_remains_bytes() -> None:
     """
     with pytest.raises(CalledProcessError) as exc_info:
         check_output(
-            ("bash", "-c", "echo out; echo oops >&2; exit 1"),
+            _failing_command(
+                f"import sys; sys.stdout.write({_STDOUT_MARKER!r}); "
+                f"sys.stderr.write({_STDERR_MARKER!r}); sys.exit(1)"
+            ),
             text=False,
         )
     error: CalledProcessError = exc_info.value
     assert isinstance(error.output, bytes)
-    assert b"out" in error.output
+    assert _STDOUT_MARKER.encode() in error.output
 
 
 def test_called_process_error_str_truncates_long_stderr() -> None:
     """
     `str(error)` truncates stderr longer than the tail-length cap,
-    keeping only the end of the output (where the actionable error
-    usually is) and marking the truncation.
+    keeping the *end* of the output — where the actionable error usually
+    is — and marking the truncation.
     """
     with pytest.raises(CalledProcessError) as exc_info:
         check_output(
-            ("bash", "-c", "yes error-line | head -c 20000 >&2; exit 1")
+            _failing_command(
+                f"import sys; "
+                f"sys.stderr.write('e' * 20_000 + {_STDERR_MARKER!r}); "
+                f"sys.exit(1)"
+            )
         )
-    message: str = str(exc_info.value)
-    assert "..." in message
-    assert len(message) < 15_000
+    stderr: str = _stderr_section(str(exc_info.value))
+    assert stderr.startswith("...")
+    # The tail is what survives truncation, not the head
+    assert stderr.endswith(_STDERR_MARKER)
+    assert len(stderr) < 15_000
 
 
 def test_get_default_shell() -> None:
