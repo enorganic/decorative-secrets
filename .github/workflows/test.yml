@@ -29,6 +29,10 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      # Report every OS/Python combination. Without this, the first
+      # failure cancels the rest of the matrix, so a single platform's
+      # failure hides whether the others would have passed.
+      fail-fast: false
       matrix:
         os:
         - ubuntu-latest
