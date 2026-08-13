@@ -53,14 +53,14 @@ In scope:
 
 Out of scope:
 
-- Changing `error.stderr`'s type or the `suppress_stderr=True` capture
-  mechanism itself (temp file, bytes encoding) — only what happens to that
-  data once a `CalledProcessError` is raised.
+- Changing `error.stderr`'s type — it stays `bytes` in the
+  `suppress_stderr=True` path. (The *encoding* of that capture did change;
+  see "Amendment: non-UTF-8 stderr" below.)
 - `TimeoutExpired` — its stdlib message already states the command and
   timeout value; this design does not touch the timeout path.
-- Any change to callers in `databricks.py`/`onepassword.py`/`_utilities.py`.
-  They already work today (several inspect `.stderr`/`.stdout` directly,
-  or wrap/suppress the exception); a subclass preserves every one of those
+- Any change to callers in `onepassword.py`/`_utilities.py`. They already
+  work today (several inspect `.stderr`/`.stdout` directly, or
+  wrap/suppress the exception); a subclass preserves every one of those
   call sites unchanged. See "Compatibility" below.
 
 **Accepted trade-off:** a caller that already prints or logs
@@ -96,7 +96,7 @@ class CalledProcessError(_CalledProcessError):
         message: str = super().__str__()
         stderr: str | bytes | None = self.stderr
         if isinstance(stderr, bytes):
-            stderr = stderr.decode("utf-8", errors="ignore")
+            stderr = stderr.decode("utf-8", errors="backslashreplace")
         stderr = (stderr or "").strip()
         if stderr:
             if len(stderr) > _STDERR_TAIL_LENGTH:
@@ -128,9 +128,12 @@ and re-raise, rather than mutating the caught instance's class:
                     error.returncode,
                     error.cmd,
                     output=error.output,
-                    stderr=stderr.read().encode("utf-8", errors="ignore"),
+                    stderr=stderr.read(),
                 ) from None
 ```
+
+(with the capture file opened as `TemporaryFile("w+b")` — see
+"Amendment: non-UTF-8 stderr" below.)
 
 `suppress_stderr=False` branch (currently has no `except` at all — `run(...,
 capture_output=True, check=True, ...)` raises directly): wrap it the same
@@ -161,7 +164,8 @@ Confirmed against every in-repo caller of `check_output`/`check_call`:
 - `databricks.py:218-224` checks `error.stdout` (bytes substring) — `.stdout`
   is untouched by this change.
 - `databricks.py:455-457` does `error.stderr.decode()` — `.stderr` remains
-  `bytes` in the `suppress_stderr=True` path, unchanged.
+  `bytes` in the `suppress_stderr=True` path. That call gained an explicit
+  `errors="backslashreplace"`; see "Amendment: non-UTF-8 stderr" below.
 - `databricks.py:239, 243, 257, 261, 412` and similar in `onepassword.py`
   use `with suppress(CalledProcessError)` against the *stdlib* name — since
   the new class subclasses `_CalledProcessError`, `isinstance` checks and
@@ -218,3 +222,37 @@ Per `docs/contributing.md`: real commands, no mocking. All in
 - `make format && make test` pass, including the rewritten
   `test_check_output` and the new tests above.
 - Version bumped to `0.14.0` in `pyproject.toml`.
+
+## Amendment: non-UTF-8 stderr
+
+Added after review of the implementing PR, which found that the design as
+originally written did not deliver its guarantee for commands whose stderr
+is not valid UTF-8. Two distinct failures, both reproduced against real
+commands:
+
+1. **`__str__` discarded undecodable bytes.** `decode("utf-8",
+   errors="ignore")` turns stderr consisting only of such bytes into an
+   empty string, so the message gets no `Stderr:` section at all — exactly
+   the blind spot this design exists to close. Now
+   `errors="backslashreplace"`, which renders those bytes as escapes and
+   can never yield an empty result from non-empty input. Reachable via
+   `suppress_stderr=False` with `text=False`.
+
+2. **The capture file raised `UnicodeDecodeError`.** `TemporaryFile("w+")`
+   is a *text*-mode file decoding strictly on `read()`, so in the default
+   `suppress_stderr=True` path a command with non-UTF-8 stderr raised
+   `UnicodeDecodeError` from inside `check_output` — before any
+   `CalledProcessError` was constructed. That is worse than losing stderr:
+   the caller receives the wrong exception type, so every
+   `except CalledProcessError`, `suppress(CalledProcessError)` and
+   `@retry((CalledProcessError,))` site fails to catch it, and the exit
+   status is lost. This bug predates this design; it is fixed here because
+   it defeats the same guarantee. The capture file is now
+   `TemporaryFile("w+b")` and its bytes are passed through unmodified,
+   which also removes a lossy decode/re-encode round-trip.
+
+Consequently `error.stderr` in the `suppress_stderr=True` path is now the
+command's raw bytes rather than UTF-8-sanitised bytes. The type is
+unchanged (`bytes`), but the content is now faithful, so
+`databricks.py:457`'s bare `error.stderr.decode()` — which would raise on
+those same bytes — takes an explicit `errors="backslashreplace"`.
