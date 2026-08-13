@@ -150,13 +150,15 @@ def test_get_databricks_secret_ignores_unrelated_env_changes(
         os.environ.update(env)
 
 
-def test_get_databricks_secret_timeout_expires() -> None:
+def test_get_databricks_secret_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A near-zero `timeout` reaches the implicit CLI-based auth check and
     raises `TimeoutExpired`, when no client credentials are available to
     bypass it entirely.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     env: Mapping[str, str] = os.environ.copy()
     try:
         os.environ.pop("DATABRICKS_CLIENT_ID", None)
@@ -175,14 +177,16 @@ def test_get_databricks_secret_timeout_expires() -> None:
         os.environ.update(env)
 
 
-def test_apply_databricks_secrets_arguments_timeout_expires() -> None:
+def test_apply_databricks_secrets_arguments_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A `timeout` set on `DatabricksWorkspaceClientArguments` reaches the
     underlying secret lookup, surfacing as an `ArgumentsResolutionError`
     (wrapping the `TimeoutExpired`) the same way other callback failures
     propagate through `apply_callback_arguments`.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     env: Mapping[str, str] = os.environ.copy()
 
     @apply_databricks_secrets_arguments(
@@ -310,6 +314,40 @@ def _require_two_valid_databricks_profiles() -> tuple[
     return valid_profiles[0], valid_profiles[1]
 
 
+@pytest.fixture
+def databricks_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> _DatabricksAuthProfile:
+    """
+    A valid, already-authenticated local profile, with `DATABRICKS_HOST`
+    removed so that the profile is the sole source of the host.
+
+    The Databricks CLI is inconsistent about `DATABRICKS_HOST`:
+    `databricks auth profiles` ignores it (reporting each profile as
+    valid against the profile's own host), while `databricks auth
+    describe --profile <name>` lets it *override* the profile's host.
+    Without this, a profile reported `valid` presents its token to
+    whichever workspace the ambient `DATABRICKS_HOST` names — which
+    fails for any contributor whose `~/.databrickscfg` points somewhere
+    other than the workspace configured in `pyproject.toml`.
+    """
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    return _require_valid_databricks_profile()
+
+
+@pytest.fixture
+def databricks_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[_DatabricksAuthProfile, _DatabricksAuthProfile]:
+    """
+    Two distinct, valid, already-authenticated local profiles, with
+    `DATABRICKS_HOST` removed for the same reason as
+    `databricks_profile`.
+    """
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    return _require_two_valid_databricks_profiles()
+
+
 def test_databricks_auth_profiles() -> None:
     """
     `_databricks_auth_profiles` parses real `databricks auth profiles`
@@ -355,29 +393,37 @@ def test_get_host_profile() -> None:
     assert _get_host_profile(profile["host"]) == profile["name"]
 
 
-def test_databricks_auth_describe() -> None:
+def test_databricks_auth_describe(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     `_databricks_auth_describe` reports success for the already
     authenticated local profile.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     assert (
-        _databricks_auth_describe(profile=profile["name"]).get("status")
+        _databricks_auth_describe(profile=databricks_profile["name"]).get(
+            "status"
+        )
         == "success"
     )
 
 
-def test_databricks_auth_describe_timeout_expires() -> None:
+def test_databricks_auth_describe_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A near-zero `timeout` causes `_databricks_auth_describe` to raise
     `TimeoutExpired`.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     with pytest.raises(TimeoutExpired):
-        _databricks_auth_describe(profile=profile["name"], timeout=1e-6)
+        _databricks_auth_describe(
+            profile=databricks_profile["name"], timeout=1e-6
+        )
 
 
-def test_databricks_auth_login_skips_when_already_authenticated() -> None:
+def test_databricks_auth_login_skips_when_already_authenticated(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     With `force=False` (the default), an already-authenticated profile
     short-circuits rather than attempting a fresh login. Verified by
@@ -389,7 +435,7 @@ def test_databricks_auth_login_skips_when_already_authenticated() -> None:
     magnitude gap a `functools.cache` hit gives, so a hard-coded absolute
     threshold would be flaky across machines/networks.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     start: float = monotonic()
     databricks_auth_login(profile=profile["name"])
     short_circuit_seconds: float = monotonic() - start
@@ -400,35 +446,35 @@ def test_databricks_auth_login_skips_when_already_authenticated() -> None:
     assert short_circuit_seconds < (real_login_seconds * 0.75)
 
 
-def test_databricks_auth_login_env_fallback() -> None:
+def test_databricks_auth_login_env_fallback(
+    databricks_profile: _DatabricksAuthProfile,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """
     With no explicit `host`/`profile`/`target`, `DATABRICKS_HOST` is
     honored when resolving whether a login is already valid.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
-    env: dict[str, str] = os.environ.copy()
-    try:
-        os.environ["DATABRICKS_HOST"] = profile["host"]
-        os.environ.pop("DATABRICKS_CONFIG_PROFILE", None)
-        databricks_auth_login()
-        assert (
-            _databricks_auth_describe(host=profile["host"]).get("status")
-            == "success"
+    monkeypatch.setenv("DATABRICKS_HOST", databricks_profile["host"])
+    monkeypatch.delenv("DATABRICKS_CONFIG_PROFILE", raising=False)
+    databricks_auth_login()
+    assert (
+        _databricks_auth_describe(host=databricks_profile["host"]).get(
+            "status"
         )
-    finally:
-        os.environ.clear()
-        os.environ.update(env)
+        == "success"
+    )
 
 
-def test_databricks_auth_login_timeout_expires() -> None:
+def test_databricks_auth_login_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A near-zero `timeout` causes `databricks_auth_login` to raise
     `TimeoutExpired`, via its internal `_databricks_auth_describe` status
     check, before any interactive login is ever attempted.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     with pytest.raises(TimeoutExpired):
-        databricks_auth_login(profile=profile["name"], timeout=1e-6)
+        databricks_auth_login(profile=databricks_profile["name"], timeout=1e-6)
 
 
 @pytest.mark.skipif(
@@ -438,7 +484,9 @@ def test_databricks_auth_login_timeout_expires() -> None:
         "so this can only be run supervised, outside CI."
     ),
 )
-def test_databricks_auth_login_force_reauthenticates() -> None:
+def test_databricks_auth_login_force_reauthenticates(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     `force=True` triggers a real second CLI login round-trip rather than
     returning the memoized result from `_databricks_auth_login`'s `@cache`.
@@ -453,7 +501,7 @@ def test_databricks_auth_login_force_reauthenticates() -> None:
     otherwise short-circuit on its own "already authenticated" check and
     never populate the cache at all.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     # Match the exact cache key `databricks_auth_login` uses internally
     # (`**get_prefixed_environ("DATABRICKS_")` is part of the key), so
     # seeding this entry actually collides with the one `force=True` must
@@ -486,7 +534,9 @@ def test_databricks_auth_login_force_reauthenticates() -> None:
         "so this can only be run supervised, outside CI."
     ),
 )
-def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> None:
+def test_databricks_auth_login_force_clears_cache_for_other_profiles(
+    databricks_profiles: tuple[_DatabricksAuthProfile, _DatabricksAuthProfile],
+) -> None:
     """
     `_databricks_auth_login.cache_clear()` wipes the entire cache, not just
     the entry for the forced profile. Confirm an unrelated, already-cached
@@ -496,7 +546,7 @@ def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> None:
     """
     first: _DatabricksAuthProfile
     second: _DatabricksAuthProfile
-    first, second = _require_two_valid_databricks_profiles()
+    first, second = databricks_profiles
     # Match the exact cache key `databricks_auth_login` uses internally
     # (`**get_prefixed_environ("DATABRICKS_")` is part of the key), so
     # seeding these entries actually collides with what `force=True` must
