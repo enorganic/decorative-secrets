@@ -183,6 +183,51 @@ def test_check_output_error_output_remains_bytes() -> None:
     assert _STDOUT_MARKER.encode() in error.output
 
 
+_UNDECODABLE_STDERR_SCRIPT: str = (
+    "import sys; sys.stderr.buffer.write(b'\\xff\\xfe\\xfd'); "
+    "sys.stderr.buffer.flush(); sys.exit(1)"
+)
+
+
+def test_called_process_error_str_includes_undecodable_stderr() -> None:
+    """
+    Stderr which is not valid UTF-8 still reaches `str(error)`, rendered
+    as escapes.
+
+    Decoding with `errors="ignore"` would drop those bytes entirely, so
+    stderr consisting only of them would leave the message with no
+    `Stderr:` section at all — silently restoring the very blind spot
+    this class exists to remove.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            _failing_command(_UNDECODABLE_STDERR_SCRIPT),
+            text=False,
+            suppress_stderr=False,
+        )
+    assert _stderr_section(str(exc_info.value)) == r"\xff\xfe\xfd"
+
+
+def test_suppressed_undecodable_stderr_raises_called_process_error() -> None:
+    """
+    A command whose stderr is not valid UTF-8 still raises
+    `CalledProcessError` — with those bytes intact on `error.stderr` and
+    escaped in the message.
+
+    Capturing stderr to a *text*-mode temporary file decoded it strictly
+    on read, so this raised `UnicodeDecodeError` from inside
+    `check_output` instead: the wrong exception type, which no
+    `except CalledProcessError` caller would catch, and which discarded
+    the command's exit status entirely.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_call(_failing_command(_UNDECODABLE_STDERR_SCRIPT))
+    error: CalledProcessError = exc_info.value
+    assert error.returncode == 1
+    assert error.stderr == b"\xff\xfe\xfd"
+    assert _stderr_section(str(error)) == r"\xff\xfe\xfd"
+
+
 def test_called_process_error_str_truncates_long_stderr() -> None:
     """
     `str(error)` truncates stderr longer than the tail-length cap,

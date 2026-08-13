@@ -454,7 +454,9 @@ def _databricks_auth_login(
             )
         except CalledProcessError as error:
             if target:
-                error_message: str = error.stderr.decode()
+                error_message: str = error.stderr.decode(
+                    "utf-8", errors="backslashreplace"
+                )
                 if "https://" not in error_message:
                     _databricks_auth_login_target(
                         target=target, timeout=timeout

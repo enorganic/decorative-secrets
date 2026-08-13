@@ -26,13 +26,18 @@ class CalledProcessError(_CalledProcessError):
     Identical to `subprocess.CalledProcessError`, except that `str(error)`
     includes the tail end of captured stderr, so a default traceback shows
     the cause of a command's failure instead of just its exit code.
+
+    Bytes which are not valid UTF-8 are rendered as escapes rather than
+    discarded — `errors="ignore"` would decode stderr consisting entirely
+    of such bytes to an empty string, leaving no stderr in the message at
+    all, which is precisely the outcome this class exists to prevent.
     """
 
     def __str__(self) -> str:
         message: str = super().__str__()
         stderr: str | bytes | None = self.stderr
         if isinstance(stderr, bytes):
-            stderr = stderr.decode("utf-8", errors="ignore")
+            stderr = stderr.decode("utf-8", errors="backslashreplace")
         stderr = (stderr or "").strip()
         if stderr:
             if len(stderr) > _STDERR_TAIL_LENGTH:
@@ -167,7 +172,12 @@ def check_output(  # noqa: C901
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
     completed_process: CompletedProcess
     if suppress_stderr:
-        with TemporaryFile("w+") as stderr:
+        # Binary mode: the child writes raw bytes to this file's
+        # descriptor, and a text-mode file would decode them strictly on
+        # `read()` below — raising `UnicodeDecodeError` in place of the
+        # `CalledProcessError` the caller is waiting to catch, whenever a
+        # command's stderr is not valid UTF-8.
+        with TemporaryFile("w+b") as stderr:
             try:
                 completed_process = run(
                     args_,
@@ -187,7 +197,7 @@ def check_output(  # noqa: C901
                     error.returncode,
                     error.cmd,
                     output=error.output,
-                    stderr=stderr.read().encode("utf-8", errors="ignore"),
+                    stderr=stderr.read(),
                 ) from None
     else:
         try:
