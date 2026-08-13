@@ -1,0 +1,1050 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://decorative-secrets.enorganic.org/superpowers/specs/2026-08-13-subprocess-stderr-visibility-design/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Visible stderr in check_output/check_call Failures — Design - decorative-secrets</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/style.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#visible-stderr-in-check_outputcheck_call-failures-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="decorative-secrets" class="md-header__button md-logo" aria-label="decorative-secrets" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            decorative-secrets
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Visible stderr in check_output/check_call Failures — Design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/enorganic/decorative-secrets/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="decorative-secrets" class="md-nav__button md-logo" aria-label="decorative-secrets" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    decorative-secrets
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/enorganic/decorative-secrets/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/databricks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    databricks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/onepassword/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    onepassword
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/defaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/callback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    callback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/utilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../license/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calledprocesserror-subclass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CalledProcessError subclass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raise-sites-in-check_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raise sites in check_output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#overload-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overload fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#success-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Success criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#amendment-non-utf-8-stderr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amendment: non-UTF-8 stderr
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="visible-stderr-in-check_outputcheck_call-failures-design">Visible <code>stderr</code> in <code>check_output</code>/<code>check_call</code> Failures — Design</h1>
+<ul>
+<li><strong>Ticket:</strong> none — ad hoc, discovered while diagnosing a CI failure in a
+  downstream consumer of this library</li>
+<li><strong>Date:</strong> 2026-08-13</li>
+</ul>
+<h2 id="problem">Problem</h2>
+<p><code>check_output</code> in <code>src/decorative_secrets/subprocess.py</code> defaults to
+<code>suppress_stderr=True</code>: the child process's stderr is redirected to a
+<code>TemporaryFile</code>, and on failure the captured bytes are attached to
+<code>error.stderr</code> before the <code>CalledProcessError</code> is re-raised (lines 144-162).
+<code>check_call</code> (lines 191-235) delegates entirely to <code>check_output</code>, so it
+inherits the same behavior. In neither branch does anything print or fold
+that captured stderr into the exception's own message — <code>error.stderr</code> sits
+on the exception object, but <code>CalledProcessError.__str__</code> only reports the
+command and exit code.</p>
+<p>This is invisible in normal use, where a caller catches the exception and
+inspects <code>error.stderr</code> directly (as <code>databricks.py:457</code> already does). It
+becomes a real diagnostic problem for any caller that instead lets the
+exception propagate to a default traceback — a pattern common in scripts
+that call <code>check_output</code>/<code>check_call</code> uncaught and rely on whatever prints
+the traceback (a CI log, a terminal) to explain the failure. In that case
+the log shows only, for example:</p>
+<div class="highlight"><pre><span></span><code>subprocess.CalledProcessError: Command &#39;(...)&#39; returned non-zero exit status 1.
+</code></pre></div>
+<p>with no indication of <em>why</em> the command failed — the underlying stderr
+existed on the exception the whole time, it just never reached anywhere a
+human could see it, forcing the failure to be reconstructed by local
+reproduction instead of read off the log.</p>
+<h2 id="scope">Scope</h2>
+<p>In scope:</p>
+<ol>
+<li>A <code>CalledProcessError</code> subclass in <code>subprocess.py</code> whose <code>__str__</code>
+   appends captured stderr (decoded, tail-capped) to the standard
+   command/exit-code message, so any default traceback — not just callers
+   that explicitly inspect <code>.stderr</code> — shows the cause of a failure.</li>
+<li>Raising that subclass from both branches of <code>check_output</code>
+   (<code>suppress_stderr=True</code> and <code>suppress_stderr=False</code>).</li>
+<li>Fixing the pre-existing <code>suppress_stderr</code> omission on the first
+   <code>@overload</code> of <code>check_output</code>.</li>
+<li>Rewriting <code>test_check_output</code> (lines 82-103), whose current
+   <code>pytest.raises(AssertionError)</code> calls are no-ops (never used as a context
+   manager) and whose <code>sys.stderr</code> swap cannot capture a child process's
+   fd-level stderr in the first place — it currently verifies nothing.</li>
+<li>A minor version release (0.13.3 to 0.14.0).</li>
+</ol>
+<p>Out of scope:</p>
+<ul>
+<li>Changing <code>error.stderr</code>'s type — it stays <code>bytes</code> in the
+  <code>suppress_stderr=True</code> path. (The <em>encoding</em> of that capture did change;
+  see "Amendment: non-UTF-8 stderr" below.)</li>
+<li><code>TimeoutExpired</code> — its stdlib message already states the command and
+  timeout value; this design does not touch the timeout path.</li>
+<li>Any change to callers in <code>onepassword.py</code>/<code>_utilities.py</code>. They already
+  work today (several inspect <code>.stderr</code>/<code>.stdout</code> directly, or
+  wrap/suppress the exception); a subclass preserves every one of those
+  call sites unchanged. See "Compatibility" below.</li>
+</ul>
+<p><strong>Accepted trade-off:</strong> a caller that already prints or logs
+<code>error.stderr</code> after catching the exception (none currently do, but future
+callers might) will see stderr twice — once from <code>str(error)</code> in whatever
+default logging captured the exception, once from its own explicit
+handling. This is a cosmetic duplication, not a correctness issue, and is
+preferable to the status quo where the default path shows nothing.</p>
+<h2 id="design">Design</h2>
+<h3 id="calledprocesserror-subclass"><code>CalledProcessError</code> subclass</h3>
+<p>Added to <code>subprocess.py</code>. The stdlib import is aliased so the module can
+still shadow the name <code>CalledProcessError</code> for its own callers, consistent
+with how this module already shadows <code>check_output</code>/<code>check_call</code>/
+<code>list2cmdline</code> relative to their stdlib counterparts:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">subprocess</span><span class="w"> </span><span class="kn">import</span> <span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">_CalledProcessError</span>
+
+<span class="n">_STDERR_TAIL_LENGTH</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10_000</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CalledProcessError</span><span class="p">(</span><span class="n">_CalledProcessError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Identical to `subprocess.CalledProcessError`, except that `str(error)`</span>
+<span class="sd">    includes the tail end of captured stderr, so a default traceback shows</span>
+<span class="sd">    the cause of a command&#39;s failure instead of just its exit code.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+        <span class="n">stderr</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">bytes</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stderr</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+            <span class="n">stderr</span> <span class="o">=</span> <span class="n">stderr</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;backslashreplace&quot;</span><span class="p">)</span>
+        <span class="n">stderr</span> <span class="o">=</span> <span class="p">(</span><span class="n">stderr</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">stderr</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">stderr</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_STDERR_TAIL_LENGTH</span><span class="p">:</span>
+                <span class="n">stderr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;...</span><span class="si">{</span><span class="n">stderr</span><span class="p">[</span><span class="o">-</span><span class="n">_STDERR_TAIL_LENGTH</span><span class="p">:]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">message</span><span class="si">}</span><span class="s2"> Stderr:</span><span class="se">\n</span><span class="si">{</span><span class="n">stderr</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">message</span>
+</code></pre></div>
+<p>No <code>__init__</code> override — the stdlib signature (<code>returncode, cmd,
+output=None, stderr=None</code>) is kept as-is, so <code>repr()</code> and pickling behave
+identically to <code>subprocess.CalledProcessError</code>.</p>
+<p>Tail-capped at 10,000 characters (module constant, easy to retune) because
+the actionable error from a failing <code>pip</code>/<code>uv</code>/<code>hatch</code> invocation is
+consistently at the <em>end</em> of its stderr, not the start; a full dump could
+run to thousands of lines for a dependency-resolution failure.</p>
+<h3 id="raise-sites-in-check_output">Raise sites in <code>check_output</code></h3>
+<p>Both branches construct the new subclass from the caught stdlib exception
+and re-raise, rather than mutating the caught instance's class:</p>
+<p><code>suppress_stderr=True</code> branch (replaces the current mutate-and-reraise):</p>
+<div class="highlight"><pre><span></span><code>            <span class="k">except</span> <span class="n">_CalledProcessError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                <span class="n">stderr</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">CalledProcessError</span><span class="p">(</span>
+                    <span class="n">error</span><span class="o">.</span><span class="n">returncode</span><span class="p">,</span>
+                    <span class="n">error</span><span class="o">.</span><span class="n">cmd</span><span class="p">,</span>
+                    <span class="n">output</span><span class="o">=</span><span class="n">error</span><span class="o">.</span><span class="n">output</span><span class="p">,</span>
+                    <span class="n">stderr</span><span class="o">=</span><span class="n">stderr</span><span class="o">.</span><span class="n">read</span><span class="p">(),</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+</code></pre></div>
+<p>(with the capture file opened as <code>TemporaryFile("w+b")</code> — see
+"Amendment: non-UTF-8 stderr" below.)</p>
+<p><code>suppress_stderr=False</code> branch (currently has no <code>except</code> at all — <code>run(...,
+capture_output=True, check=True, ...)</code> raises directly): wrap it the same
+way, re-raising <code>CalledProcessError(error.returncode, error.cmd,
+output=error.output, stderr=error.stderr) from None</code>. In this branch
+<code>error.stderr</code> follows <code>text</code> mode (<code>str</code> or <code>bytes</code>); <code>__str__</code> already
+handles both.</p>
+<p><code>raise ... from None</code> suppresses the "During handling of the above
+exception..." chain — the raise site is the same frame as the original
+catch, so nothing diagnostic is lost, and the traceback stays as clean as
+today's.</p>
+<p><code>check_call</code> needs no changes beyond what <code>check_output</code> already gives it,
+since it delegates entirely.</p>
+<h3 id="overload-fix">Overload fix</h3>
+<p>While editing, add the missing <code>suppress_stderr: bool = True</code> parameter to
+the first <code>@overload</code> (<code>text: Literal[True]</code>, currently lines 43-54) —
+the other two overloads and the implementation already have it; this one
+was simply missed.</p>
+<h2 id="compatibility">Compatibility</h2>
+<p>Confirmed against every in-repo caller of <code>check_output</code>/<code>check_call</code>:</p>
+<ul>
+<li><code>databricks.py:218-224</code> checks <code>error.stdout</code> (bytes substring) — <code>.stdout</code>
+  is untouched by this change.</li>
+<li><code>databricks.py:455-457</code> does <code>error.stderr.decode()</code> — <code>.stderr</code> remains
+  <code>bytes</code> in the <code>suppress_stderr=True</code> path. That call gained an explicit
+  <code>errors="backslashreplace"</code>; see "Amendment: non-UTF-8 stderr" below.</li>
+<li><code>databricks.py:239, 243, 257, 261, 412</code> and similar in <code>onepassword.py</code>
+  use <code>with suppress(CalledProcessError)</code> against the <em>stdlib</em> name — since
+  the new class subclasses <code>_CalledProcessError</code>, <code>isinstance</code> checks and
+  <code>except CalledProcessError</code> clauses written against the stdlib type
+  continue to match.</li>
+<li>The <code>@retry</code> decorator on <code>_databricks_auth_login</code> (<code>databricks.py:424</code>)
+  matches on <code>(CalledProcessError,)</code> — same reasoning, still matches.</li>
+</ul>
+<p>No caller needs to change.</p>
+<h2 id="testing">Testing</h2>
+<p>Per <code>docs/contributing.md</code>: real commands, no mocking. All in
+<code>tests/test_subprocess.py</code>.</p>
+<ol>
+<li><strong>Rewrite <code>test_check_output</code></strong> (lines 82-103): replace the broken
+   <code>sys.stderr</code>-swap-plus-no-op-<code>pytest.raises</code> pattern with <code>capfd</code> (which
+   captures actual OS-level file descriptors, unlike the <code>StringIO</code> swap)
+   and <code>pytest.raises</code> used correctly as a context manager:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">test_check_call_suppresses_and_attaches_stderr</span><span class="p">(</span>
+    <span class="n">capfd</span><span class="p">:</span> <span class="n">pytest</span><span class="o">.</span><span class="n">CaptureFixture</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="n">CalledProcessError</span><span class="p">)</span> <span class="k">as</span> <span class="n">exc_info</span><span class="p">:</span>
+        <span class="n">check_call</span><span class="p">((</span><span class="s2">&quot;bash&quot;</span><span class="p">,</span> <span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="s2">&quot;echo oops &gt;&amp;2; exit 3&quot;</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="n">capfd</span><span class="o">.</span><span class="n">readouterr</span><span class="p">()</span><span class="o">.</span><span class="n">err</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">error</span><span class="p">:</span> <span class="n">CalledProcessError</span> <span class="o">=</span> <span class="n">exc_info</span><span class="o">.</span><span class="n">value</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="p">,</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="sa">b</span><span class="s2">&quot;oops&quot;</span> <span class="ow">in</span> <span class="n">error</span><span class="o">.</span><span class="n">stderr</span>
+    <span class="k">assert</span> <span class="n">error</span><span class="o">.</span><span class="n">returncode</span> <span class="o">==</span> <span class="mi">3</span>  <span class="c1"># noqa: PLR2004</span>
+    <span class="k">assert</span> <span class="s2">&quot;oops&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+</code></pre></div>
+<ol>
+<li><code>test_check_output_error_str_includes_stderr</code> — same shape via
+   <code>check_output</code> directly, covering the function <code>check_call</code> delegates to.</li>
+<li><code>test_check_output_unsuppressed_error_str_includes_stderr</code> —
+   <code>suppress_stderr=False</code> branch; assert <code>"oops" in str(error)</code>.</li>
+<li><code>test_called_process_error_str_truncates_long_stderr</code> — a command
+   producing more than <code>_STDERR_TAIL_LENGTH</code> characters of stderr (e.g.
+   <code>("bash", "-c", "yes error-line | head -c 20000 &gt;&amp;2; exit 1")</code>); assert
+   <code>str(error)</code> contains <code>"..."</code> and its length is bounded.</li>
+<li>Confirm the existing bytes-stdout contract (<code>check_output(...,
+   text=False)</code> failure) still holds — <code>error.output</code> semantics are
+   untouched by this change.</li>
+</ol>
+<h2 id="success-criteria">Success criteria</h2>
+<ul>
+<li><code>str(error)</code> for a failed <code>check_output</code>/<code>check_call</code> call includes the
+  command's captured stderr (tail-capped), with no caller changes required
+  elsewhere in this repo.</li>
+<li><code>error.stderr</code>/<code>error.stdout</code> types and values are unchanged from today.</li>
+<li><code>make format &amp;&amp; make test</code> pass, including the rewritten
+  <code>test_check_output</code> and the new tests above.</li>
+<li>Version bumped to <code>0.14.0</code> in <code>pyproject.toml</code>.</li>
+</ul>
+<h2 id="amendment-non-utf-8-stderr">Amendment: non-UTF-8 stderr</h2>
+<p>Added after review of the implementing PR, which found that the design as
+originally written did not deliver its guarantee for commands whose stderr
+is not valid UTF-8. Two distinct failures, both reproduced against real
+commands:</p>
+<ol>
+<li>
+<p><strong><code>__str__</code> discarded undecodable bytes.</strong> <code>decode("utf-8",
+   errors="ignore")</code> turns stderr consisting only of such bytes into an
+   empty string, so the message gets no <code>Stderr:</code> section at all — exactly
+   the blind spot this design exists to close. Now
+   <code>errors="backslashreplace"</code>, which renders those bytes as escapes and
+   can never yield an empty result from non-empty input. Reachable via
+   <code>suppress_stderr=False</code> with <code>text=False</code>.</p>
+</li>
+<li>
+<p><strong>The capture file raised <code>UnicodeDecodeError</code>.</strong> <code>TemporaryFile("w+")</code>
+   is a <em>text</em>-mode file decoding strictly on <code>read()</code>, so in the default
+   <code>suppress_stderr=True</code> path a command with non-UTF-8 stderr raised
+   <code>UnicodeDecodeError</code> from inside <code>check_output</code> — before any
+   <code>CalledProcessError</code> was constructed. That is worse than losing stderr:
+   the caller receives the wrong exception type, so every
+   <code>except CalledProcessError</code>, <code>suppress(CalledProcessError)</code> and
+   <code>@retry((CalledProcessError,))</code> site fails to catch it, and the exit
+   status is lost. This bug predates this design; it is fixed here because
+   it defeats the same guarantee. The capture file is now
+   <code>TemporaryFile("w+b")</code> and its bytes are passed through unmodified,
+   which also removes a lossy decode/re-encode round-trip.</p>
+</li>
+</ol>
+<p>Consequently <code>error.stderr</code> in the <code>suppress_stderr=True</code> path is now the
+command's raw bytes rather than UTF-8-sanitised bytes. The type is
+unchanged (<code>bytes</code>), but the content is now faithful, so
+<code>databricks.py:457</code>'s bare <code>error.stderr.decode()</code> — which would raise on
+those same bytes — takes an explicit <code>errors="backslashreplace"</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../../assets/javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

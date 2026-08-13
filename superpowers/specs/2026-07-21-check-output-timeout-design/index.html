@@ -1,0 +1,1279 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://decorative-secrets.enorganic.org/superpowers/specs/2026-07-21-check-output-timeout-design/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>timeout Propagation to check_output — Spec - decorative-secrets</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/style.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#timeout-propagation-to-check_output-spec" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="decorative-secrets" class="md-header__button md-logo" aria-label="decorative-secrets" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            decorative-secrets
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              timeout Propagation to check_output — Spec
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1M8 13h8v-2H8zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 5-5 5 5 0 0 0-5-5"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5M7 15a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/enorganic/decorative-secrets/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="decorative-secrets" class="md-nav__button md-logo" aria-label="decorative-secrets" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    decorative-secrets
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/enorganic/decorative-secrets/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/databricks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    databricks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/onepassword/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    onepassword
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    environment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/defaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/callback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    callback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/utilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    utilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../license/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    License
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ground-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ground rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#already-done-uncommitted-in-working-tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Already done (uncommitted, in working tree)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cache-key-narrowing-osenviron-prefix-filtered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache-key narrowing: **os.environ → prefix-filtered
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_utilitiespy-full-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        _utilities.py — full inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#databrickspy-full-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        databricks.py — full inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#onepasswordpy-full-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        onepassword.py — full inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#suggested-implementation-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suggested implementation order
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="timeout-propagation-to-check_output-spec"><code>timeout</code> Propagation to <code>check_output</code> — Spec</h1>
+<p>This document specifies adding a <code>timeout: float | None = None</code> parameter
+to every function in <code>src/decorative_secrets/</code> whose call chain reaches
+<code>decorative_secrets.subprocess.check_output</code>, so a caller can bound how
+long any underlying CLI invocation (<code>databricks</code>, <code>op</code>, <code>brew</code>, <code>winget</code>,
+install scripts) is allowed to run, all the way down to
+<code>subprocess.run(..., timeout=...)</code>.</p>
+<p>Branch: <code>check-output-timeout</code>. This spec covers the working tree as of
+this branch, including the partial, uncommitted start already present in
+<code>subprocess.py</code> and <code>databricks.py</code>.</p>
+<p>It also covers a related cleanup discovered while auditing the same
+<code>@cache</code>-key surface this change touches: four call sites splat the
+<em>entire</em> <code>os.environ</code> into a cached function just to widen its cache key,
+when only a prefix-identifiable subset of env vars are ever relevant.
+See "Cache-key narrowing" below.</p>
+<h2 id="ground-rules">Ground rules</h2>
+<blockquote>
+<p><strong>Superseded by implementation</strong>: <code>timeout</code> is keyword-only everywhere
+(not just where convenient), and every <em>public</em> function defaults to
+<code>60</code> rather than <code>None</code> — <code>None</code> remains the default only on private
+(underscore-prefixed) helpers, which always receive an explicit value
+forwarded from their public caller. See <code>docs/contributing.md</code>'s
+Conventions section for the final rule.</p>
+</blockquote>
+<ul>
+<li><code>timeout</code> is <code>float | None</code>, matching <code>subprocess.run</code>'s own <code>timeout</code>
+  semantics (<code>subprocess.TimeoutExpired</code> on expiry).</li>
+<li><code>timeout</code> is always keyword-only.</li>
+<li>Every function that calls <code>check_output</code>/<code>check_call</code>, or that calls
+  another function in this library which (transitively) does, must accept
+  and forward <code>timeout</code>. No link in a call chain may silently drop it.</li>
+<li>Do not conflate this with <code>decorative_secrets.utilities.timeout</code>, the
+  <code>@timeout(seconds)</code> decorator used elsewhere in the codebase (signal/
+  thread-based wall-clock timeout for arbitrary Python code). That is a
+  different mechanism solving a different problem. This spec is only
+  about the <code>subprocess.run(timeout=...)</code> argument threaded through
+  <code>check_output</code>/<code>check_call</code>.</li>
+<li><strong>Caching interaction</strong>: several functions in this chain are <code>@cache</code>d
+  (<code>which_brew</code>, <code>which_winget</code>, <code>_databricks_auth_profiles</code>,
+  <code>_get_host_profile</code>, <code>_databricks_auth_login</code>,
+  <code>_get_env_databricks_workspace_client</code>, <code>_get_secret</code>, <code>_op_signin</code>,
+  <code>_read_onepassword_secret</code>) or <code>@alru_cache</code>d
+  (<code>async_read_onepassword_secret</code>). Adding <code>timeout</code> as a parameter makes
+  it part of the cache key, same as the existing <code>host</code>/<code>profile</code>/<code>**env</code>
+  parameters already do. Two calls that differ only by <code>timeout</code> will
+  therefore populate separate cache entries rather than sharing one. This
+  is consistent with existing precedent in this codebase (e.g.
+  <code>_databricks_auth_login</code> is already called with the full <code>**os.environ</code>
+  as cache-key-widening kwargs) and is called out here so it isn't
+  mistaken for a bug later. See also the <code>os.environ</code> narrowing below,
+  which shrinks — but does not eliminate — this same cache-key surface.</li>
+<li><strong><code>apply_databricks_secrets_arguments</code> / <code>apply_onepassword_arguments</code></strong>:
+  the lookup callback these decorators wire up
+  (<code>_get_scope_key_secret</code>, <code>read_onepassword_secret</code>) is invoked by
+  <code>apply_callback_arguments</code> (<code>callback.py</code>) with exactly one positional
+  argument — the scope/key tuple or resource string. There is no
+  mechanism today for a per-call keyword argument (like a per-invocation
+  <code>timeout</code>) to reach the callback through that decorator. Per-call
+  override is therefore out of scope. Instead, add <code>timeout</code> to the
+  existing options dataclasses (<code>DatabricksWorkspaceClientArguments</code>,
+  <code>ApplyOnepasswordArgumentsOptions</code>) that are already threaded into the
+  callback via <code>functools.partial</code> at decoration time (mirrors how
+  <code>host</code>/<code>profile</code>/<code>account</code>/<code>token</code> are handled today). This gives a
+  decorator-level (fixed at decoration time), not per-call, timeout.</li>
+</ul>
+<h2 id="already-done-uncommitted-in-working-tree">Already done (uncommitted, in working tree)</h2>
+<p><code>subprocess.py</code>:
+- <code>check_output</code> — <code>timeout</code> param added to all three <code>@overload</code>
+  signatures and the implementation; forwarded to both <code>subprocess.run(...)</code>
+  call sites (<code>suppress_stderr=True</code> and <code>suppress_stderr=False</code> branches).
+  Docstring <code>Raises:</code> section updated.
+- <code>check_call</code> — <code>timeout</code> param added and forwarded to <code>check_output</code>.</p>
+<p>Cleanup needed on what's already there:
+- The three <code>@overload</code> stubs for <code>check_output</code> place <code>timeout</code> in an
+  inconsistent position relative to <code>echo</code> (before <code>echo</code> in two overloads,
+  after in the third, and the implementation itself). Normalize the
+  parameter order across all four signatures to:
+  <code>cwd, input, env, suppress_stderr, shell, timeout, echo</code> (implementation
+  order), so the overloads and implementation read identically.</p>
+<p><code>databricks.py</code>:
+- <code>_databricks_auth_describe</code> — <code>timeout</code> param added, but only forwarded
+  on the <code>if host or profile or target:</code> branch's <code>check_output</code> call
+  (line ~331-344). The <code>else:</code> branch's <code>check_output</code> call (line ~348-351,
+  the no-host/profile/target auto-select path) does not forward <code>timeout</code>.
+  Also, <code>which_databricks()</code> (line ~328) and <code>_get_host_profile(host)</code>
+  (line ~327) are called without <code>timeout</code> — once those two gain a
+  <code>timeout</code> parameter (see below), this function must forward to them too.
+- <code>databricks_auth_login</code> — <code>timeout</code> param added and forwarded to
+  <code>_databricks_auth_describe(timeout=timeout)</code> and
+  <code>_databricks_auth_login(timeout=timeout, ...)</code>. Docstring has a
+  duplicated <code>CalledProcessError</code> entry in <code>Raises:</code> (copy/paste artifact)
+  and trailing whitespace on the blank line after the <code>Args</code>/<code>Parameters</code>
+  block — both need cleanup. The final <code>return _databricks_auth_login(...)</code>
+  call is also awkwardly line-wrapped (<code>timeout=timeout,</code> and <code>**os.environ</code>
+  split across lines in a way <code>make format</code> will likely reflow) — let
+  <code>make format</code> settle it rather than hand-wrapping.</p>
+<p>Neither <code>_databricks_auth_login</code> itself, <code>which_databricks</code>,
+<code>_get_host_profile</code>, nor <code>_databricks_auth_profiles</code> — all in the call
+chain below <code>_databricks_auth_describe</code>/<code>databricks_auth_login</code> — have
+been touched yet. See below.</p>
+<h2 id="cache-key-narrowing-osenviron-prefix-filtered">Cache-key narrowing: <code>**os.environ</code> → prefix-filtered</h2>
+<p>Unrelated to <code>timeout</code>, but touching the same cache-key mechanism
+discussed above, so bundled into this pass: four call sites currently
+splat the <em>entire</em> process environment into a <code>@cache</code>d function purely
+to widen its cache key (so the cache is invalidated whenever any env var
+changes) — even though only a small, prefix-identifiable subset of env
+vars are ever relevant to that function's operation:</p>
+<table>
+<thead>
+<tr>
+<th>Call site</th>
+<th>Splats</th>
+<th>Cached callee</th>
+<th>Relevant prefix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>databricks_auth_login</code> → <code>_databricks_auth_login(..., **os.environ)</code> (<code>databricks.py:497</code>)</td>
+<td>full <code>os.environ</code></td>
+<td><code>_databricks_auth_login</code> (<code>@cache</code> + <code>@retry</code>)</td>
+<td><code>DATABRICKS_</code></td>
+</tr>
+<tr>
+<td><code>get_databricks_workspace_client</code> → <code>_get_env_databricks_workspace_client(..., **os.environ)</code> (<code>databricks.py:680</code>)</td>
+<td>full <code>os.environ</code></td>
+<td><code>_get_env_databricks_workspace_client</code> (<code>@cache</code>)</td>
+<td><code>DATABRICKS_</code></td>
+</tr>
+<tr>
+<td><code>get_databricks_secret</code> → <code>_get_secret(..., **os.environ)</code> (<code>databricks.py:939</code>)</td>
+<td>full <code>os.environ</code></td>
+<td><code>_get_secret</code> (<code>@cache</code>)</td>
+<td><code>DATABRICKS_</code></td>
+</tr>
+<tr>
+<td><code>get_onepassword_secret</code>/<code>read_onepassword_secret</code> → <code>_read_onepassword_secret(..., **os.environ)</code> (<code>onepassword.py:397</code>)</td>
+<td>full <code>os.environ</code></td>
+<td><code>_read_onepassword_secret</code> (<code>@cache</code>)</td>
+<td><code>OP_</code></td>
+</tr>
+</tbody>
+</table>
+<p>Every env var explicitly read anywhere in <code>databricks.py</code> is
+<code>DATABRICKS_HOST</code>, <code>DATABRICKS_CONFIG_PROFILE</code>, <code>DATABRICKS_CLIENT_ID</code>, or
+<code>DATABRICKS_CLIENT_SECRET</code> — all <code>DATABRICKS_</code>-prefixed. Every env var
+explicitly read in <code>onepassword.py</code> is <code>OP_ACCOUNT</code>,
+<code>OP_SERVICE_ACCOUNT_TOKEN</code>, <code>OP_CONNECT_HOST</code>, or <code>OP_CONNECT_TOKEN</code> — all
+<code>OP_</code>-prefixed. Filtering by prefix rather than enumerating these exact
+names is deliberate: <code>_get_env_databricks_workspace_client</code> constructs a
+<code>databricks.sdk.WorkspaceClient</code>, which itself reads additional
+<code>DATABRICKS_*</code> variables internally (e.g. <code>DATABRICKS_TOKEN</code>,
+<code>DATABRICKS_AUTH_TYPE</code>, <code>DATABRICKS_AZURE_*</code>) that never appear as a
+literal <code>os.getenv(...)</code> call in this repo; likewise the <code>op</code> CLI consults
+dynamically-named <code>OP_SESSION_&lt;account-uuid&gt;</code> variables. A fixed name list
+would miss both. A prefix filter catches them without needing to track
+the SDK's/CLI's full env var surface by hand.</p>
+<p>Add a small helper (<code>_utilities.py</code>, alongside <code>get_errors</code>/
+<code>unwrap_function</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_prefixed_environ</span><span class="p">(</span><span class="o">*</span><span class="n">prefixes</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return the subset of `os.environ` whose variable names start with one</span>
+<span class="sd">    of `prefixes`, for use as cache-key-widening `**kwargs` — narrower</span>
+<span class="sd">    than splatting the entire environment, but still cache-busts whenever</span>
+<span class="sd">    a variable actually relevant to the operation changes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">key</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">value</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="n">key</span><span class="p">:</span> <span class="n">value</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefixes</span><span class="p">)</span>
+    <span class="p">}</span>
+</code></pre></div>
+<p>(<code>str.startswith</code> accepts a tuple, so a single <code>prefixes</code> tuple argument
+covers the multi-prefix case too, though none of the four call sites need
+more than one prefix today.)</p>
+<p>Then replace each <code>**os.environ</code> above with
+<code>**get_prefixed_environ("DATABRICKS_")</code> (three call sites in
+<code>databricks.py</code>) or <code>**get_prefixed_environ("OP_")</code> (<code>onepassword.py</code>).
+The receiving functions' own <code>**env: str,  # noqa: ARG001</code> parameters are
+unchanged — they're still unused, just now populated with fewer entries.</p>
+<p>This does not change behavior of what the functions <em>do</em>, only how
+precisely their cache invalidates: today, changing e.g. <code>PATH</code> or
+<code>EDITOR</code> needlessly busts <code>get_databricks_secret</code>'s cache; after this
+change, only a <code>DATABRICKS_*</code> change does.</p>
+<h2 id="_utilitiespy-full-inventory"><code>_utilities.py</code> — full inventory</h2>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Calls (direct)</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>install_brew()</code></td>
+<td><code>check_output</code> (×1)</td>
+<td>add <code>timeout: float \| None = None</code>, forward to <code>check_output</code></td>
+</tr>
+<tr>
+<td><code>which_brew()</code> (<code>@cache</code>)</td>
+<td><code>check_output</code> (×2), <code>install_brew()</code></td>
+<td>add <code>timeout</code>, forward to both <code>check_output</code> calls and to <code>install_brew(timeout=timeout)</code></td>
+</tr>
+<tr>
+<td><code>which_winget()</code> (<code>@cache</code>)</td>
+<td><code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to <code>check_output</code></td>
+</tr>
+<tr>
+<td><em>(new)</em> <code>get_prefixed_environ(*prefixes)</code></td>
+<td>—</td>
+<td>new helper; see "Cache-key narrowing" above</td>
+</tr>
+</tbody>
+</table>
+<h2 id="databrickspy-full-inventory"><code>databricks.py</code> — full inventory</h2>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Calls (direct)</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_install_sh_databricks_cli()</code></td>
+<td><code>check_call</code> (×1)</td>
+<td>add <code>timeout</code>, forward</td>
+</tr>
+<tr>
+<td><code>_install_databricks_cli()</code></td>
+<td><code>which_winget()</code>, <code>which_brew()</code>, <code>check_output</code> (×4), <code>_install_sh_databricks_cli()</code></td>
+<td>add <code>timeout</code>, forward to all five</td>
+</tr>
+<tr>
+<td><code>which_databricks()</code></td>
+<td><code>check_output</code> (×1), <code>_install_databricks_cli()</code></td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>_databricks_auth_profiles()</code> (<code>@cache</code>)</td>
+<td><code>which_databricks()</code>, <code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>_get_host_profile(host)</code> (<code>@cache</code>)</td>
+<td><code>_databricks_auth_profiles()</code></td>
+<td>add <code>timeout</code>, forward</td>
+</tr>
+<tr>
+<td><code>_databricks_auth_describe(...)</code></td>
+<td><code>_get_host_profile()</code>, <code>which_databricks()</code>, <code>check_output</code> (×2)</td>
+<td>complete the partial work above: forward <code>timeout</code> on all four calls</td>
+</tr>
+<tr>
+<td><code>_databricks_bundle_summary(target, profile=None)</code></td>
+<td><code>which_databricks()</code>, <code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>_databricks_auth_login_target(target, **env)</code></td>
+<td><code>_databricks_auth_login()</code>, <code>_databricks_bundle_summary()</code></td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>_databricks_auth_login(...)</code> (<code>@cache</code> + <code>@retry</code>)</td>
+<td><code>which_databricks()</code>, <code>_get_host_profile()</code>, <code>check_call</code> (×2), <code>_databricks_auth_login_target()</code>, <code>_databricks_auth_profiles()</code>, self (recursive, line ~441)</td>
+<td>add <code>timeout</code>, forward to all six call sites</td>
+</tr>
+<tr>
+<td><code>databricks_auth_login(...)</code></td>
+<td><code>_databricks_auth_describe()</code>, <code>_databricks_auth_login()</code></td>
+<td>already partially done; finish per cleanup notes above; <strong>also</strong> replace <code>**os.environ</code> with <code>**get_prefixed_environ("DATABRICKS_")</code> (line ~497)</td>
+</tr>
+<tr>
+<td><code>_get_env_databricks_workspace_client(...)</code> (<code>@cache</code>)</td>
+<td><code>databricks_auth_login()</code> (line ~561)</td>
+<td>add <code>timeout</code>, forward — currently this call site passes <code>host</code>/<code>profile</code> only</td>
+</tr>
+<tr>
+<td><code>get_databricks_workspace_client(...)</code></td>
+<td><code>_get_env_databricks_workspace_client()</code></td>
+<td>add <code>timeout</code>, forward; <strong>also</strong> replace <code>**os.environ</code> with <code>**get_prefixed_environ("DATABRICKS_")</code> (line ~680)</td>
+</tr>
+<tr>
+<td><code>get_dbutils(...)</code></td>
+<td><code>get_databricks_workspace_client()</code></td>
+<td>add <code>timeout</code>, forward</td>
+</tr>
+<tr>
+<td><code>_get_secret(...)</code> (<code>@cache</code>)</td>
+<td><code>get_dbutils()</code></td>
+<td>add <code>timeout</code>, forward</td>
+</tr>
+<tr>
+<td><code>get_databricks_secret(...)</code></td>
+<td><code>_get_secret()</code></td>
+<td>add <code>timeout</code>, forward — this is the main public secret-retrieval entry point; <strong>also</strong> replace <code>**os.environ</code> with <code>**get_prefixed_environ("DATABRICKS_")</code> (line ~939)</td>
+</tr>
+<tr>
+<td><code>_get_scope_key_secret(scope_key, ...)</code></td>
+<td><code>get_databricks_secret()</code></td>
+<td>add <code>timeout</code>, forward (see decorator note below re: how this actually receives a value)</td>
+</tr>
+<tr>
+<td><code>apply_databricks_secrets_arguments(...)</code></td>
+<td>builds <code>partial(_get_scope_key_secret, **asdict(...))</code></td>
+<td>add <code>timeout: float \| None = None</code> field to <code>DatabricksWorkspaceClientArguments</code> dataclass so it flows through the existing <code>asdict(...)</code> unpack into the <code>partial</code></td>
+</tr>
+<tr>
+<td><code>main()</code> (CLI)</td>
+<td><code>_install_databricks_cli()</code>, <code>get_databricks_secret()</code></td>
+<td>add <code>--timeout FLOAT</code> argparse option to both the <code>install</code> and <code>get</code> subcommands, forward to the respective call</td>
+</tr>
+</tbody>
+</table>
+<h2 id="onepasswordpy-full-inventory"><code>onepassword.py</code> — full inventory</h2>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Calls (direct)</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_install_op()</code></td>
+<td><code>which_winget()</code>, <code>which_brew()</code>, <code>check_output</code> (×2)</td>
+<td>add <code>timeout</code>, forward to all four</td>
+</tr>
+<tr>
+<td><code>which_op()</code></td>
+<td><code>check_output</code> (×1), <code>_install_op()</code></td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>_op_signin(account=None)</code> (<code>@cache</code>)</td>
+<td><code>which_op()</code>, <code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>iter_op_account_list()</code></td>
+<td><code>which_op()</code>, <code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to both</td>
+</tr>
+<tr>
+<td><code>op_signin(account=None)</code></td>
+<td><code>_op_signin()</code>, <code>iter_op_account_list()</code>, <code>which_op()</code></td>
+<td>add <code>timeout</code>, forward to all three</td>
+</tr>
+<tr>
+<td><code>async_read_onepassword_secret(...)</code> (<code>@alru_cache</code>)</td>
+<td><code>op_signin()</code>, <code>which_op()</code>, <code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to all three (the <code>_async_resolve_resource</code>/<code>_async_resolve_connect_resource</code> branches don't touch <code>check_output</code> — no change needed there)</td>
+</tr>
+<tr>
+<td><code>_read_onepassword_secret(...)</code> (<code>@cache</code>)</td>
+<td><code>op_signin()</code>, <code>which_op()</code>, <code>check_output</code> (×1)</td>
+<td>add <code>timeout</code>, forward to all three</td>
+</tr>
+<tr>
+<td><code>get_onepassword_secret(...)</code> / <code>read_onepassword_secret</code> (alias)</td>
+<td><code>_read_onepassword_secret()</code></td>
+<td>add <code>timeout</code>, forward — main public secret-retrieval entry point; <strong>also</strong> replace <code>**os.environ</code> with <code>**get_prefixed_environ("OP_")</code> (line ~397)</td>
+</tr>
+<tr>
+<td><code>apply_onepassword_arguments(...)</code></td>
+<td>builds <code>partial(read_onepassword_secret_, ...)</code> / <code>partial(async_read_onepassword_secret_, ...)</code></td>
+<td>add <code>timeout: float \| None = None</code> field to <code>ApplyOnepasswordArgumentsOptions</code>, thread through the existing conditional-kwargs <code>partial(...)</code> construction (same pattern as <code>account</code>/<code>token</code>/<code>host</code>)</td>
+</tr>
+<tr>
+<td><code>main()</code> (CLI)</td>
+<td><code>_install_op()</code>, <code>read_onepassword_secret()</code></td>
+<td>add <code>--timeout FLOAT</code> argparse option to both the <code>install</code> and <code>get</code> subcommands, forward to the respective call</td>
+</tr>
+</tbody>
+</table>
+<h2 id="out-of-scope">Out of scope</h2>
+<ul>
+<li><code>callback.py</code> / <code>apply_callback_arguments</code> itself — no change. It stays
+  a single-positional-argument callback contract; decorator-level timeout
+  configuration (via the options dataclasses above) is the only path for
+  <code>apply_databricks_secrets_arguments</code>/<code>apply_onepassword_arguments</code>.</li>
+<li><code>_async_resolve_resource</code>, <code>_async_resolve_connect_resource</code>,
+  <code>_resolve_connect_resource</code> (<code>onepassword.py</code>) — these use the
+  <code>onepassword-sdk</code>/<code>onepasswordconnectsdk</code> HTTP clients, not
+  <code>check_output</code>. Any timeout support for them would be a different
+  mechanism (HTTP client timeout) and is a separate concern.</li>
+<li><code>environment.py</code>, <code>defaults.py</code>, <code>callback.py</code>, <code>errors.py</code>,
+  <code>utilities.py</code> — none call <code>check_output</code>/<code>check_call</code>, directly or
+  transitively.</li>
+</ul>
+<h2 id="testing">Testing</h2>
+<p>Per <code>docs/contributing.md</code>, any test exercising a real external resource
+(Databricks CLI/workspace, 1Password CLI, Homebrew, WinGet, network
+installers) must be a genuine integration test — no mocking those systems.
+Reuse the existing <code>databricks_env</code>/<code>onepassword_vault</code> fixtures.</p>
+<ul>
+<li><code>tests/test_subprocess.py</code>: <code>check_output</code>/<code>check_call</code> with a very
+  small <code>timeout</code> against a real long-running command (e.g. <code>sleep 5</code> /
+  platform equivalent) raises <code>subprocess.TimeoutExpired</code>; a generous
+  <code>timeout</code> against a fast command succeeds normally and returns the same
+  result as an untimed call.</li>
+<li><code>tests/test__utilities.py</code>: <code>which_brew</code>/<code>which_winget</code>/<code>install_brew</code>
+  accept <code>timeout</code> and forward it (assert <code>TimeoutExpired</code> with a
+  near-zero timeout against the real <code>--version</code>/install invocation,
+  platform-gated as the existing tests for these already are).</li>
+<li><code>tests/test_databricks.py</code>: <code>which_databricks</code>, <code>_databricks_auth_profiles</code>,
+  <code>_databricks_auth_describe</code>, <code>databricks_auth_login</code>,
+  <code>get_databricks_secret</code> each accept <code>timeout</code> and a near-zero value
+  raises <code>TimeoutExpired</code> against the real CLI (<code>databricks_env</code> fixture).
+  Also assert a generous <code>timeout</code> doesn't change the successful result
+  compared to the existing untimed tests.</li>
+<li><code>tests/test_onepassword.py</code>: same pattern for <code>which_op</code>, <code>op_signin</code>,
+  <code>iter_op_account_list</code>, <code>get_onepassword_secret</code>/<code>read_onepassword_secret</code>,
+  <code>async_read_onepassword_secret</code> (<code>onepassword_vault</code> fixture).</li>
+<li><code>tests/test_databricks.py</code> / <code>tests/test_onepassword.py</code>: confirm
+  <code>apply_databricks_secrets_arguments</code>/<code>apply_onepassword_arguments</code>
+  accept a <code>timeout</code> on <code>DatabricksWorkspaceClientArguments</code>/
+  <code>ApplyOnepasswordArgumentsOptions</code> and that it actually reaches the
+  underlying CLI call (near-zero timeout → the decorated function call
+  raises/propagates <code>TimeoutExpired</code>, or the resulting
+  <code>ArgumentsResolutionError</code> wraps it, matching how other callback
+  failures already surface through <code>apply_callback_arguments</code>).</li>
+<li>Cache-key regression guard: for at least one <code>@cache</code>d function in the
+  chain (e.g. <code>_op_signin</code> or <code>_databricks_auth_login</code>), assert that two
+  calls with <em>different</em> <code>timeout</code> values each trigger a real CLI
+  round-trip (not a cache hit from the other), while two calls with the
+  <em>same</em> <code>timeout</code> (and otherwise identical arguments) do hit cache —
+  parallels the existing wall-clock-timing approach used in
+  <code>docs/superpowers/specs/2026-07-21-missing-test-coverage-design.md</code> for
+  <code>databricks_auth_login(force=True)</code>.</li>
+<li><code>tests/test__utilities.py</code>: <code>get_prefixed_environ</code> — pure unit test (no
+  external resource involved), no mocking restriction applies. Assert it
+  returns only matching-prefix entries, supports multiple prefixes, and
+  returns an empty dict when nothing matches.</li>
+<li>Cache-key narrowing regression guard: for one narrowed call site (e.g.
+  <code>get_databricks_secret</code>), assert that changing an <em>irrelevant</em> env var
+  (e.g. <code>PATH</code>) between two otherwise-identical calls still hits cache
+  (no fresh CLI/SDK round-trip), while changing a <code>DATABRICKS_*</code> var does
+  bust it — proves the narrowing didn't accidentally stop invalidating on
+  vars that matter, and does skip ones that don't. Same pattern for
+  <code>get_onepassword_secret</code> with an <code>OP_*</code> var.</li>
+</ul>
+<h2 id="suggested-implementation-order">Suggested implementation order</h2>
+<ol>
+<li>Finish <code>subprocess.py</code> cleanup (overload parameter ordering).</li>
+<li><code>_utilities.py</code> (leaf functions, no dependents within the library
+   other than <code>databricks.py</code>/<code>onepassword.py</code>), including the new
+   <code>get_prefixed_environ</code> helper.</li>
+<li><code>databricks.py</code>, bottom-up: <code>_install_sh_databricks_cli</code> →
+   <code>_install_databricks_cli</code> → <code>which_databricks</code> →
+   <code>_databricks_auth_profiles</code> → <code>_get_host_profile</code> →
+   <code>_databricks_auth_describe</code> (finish) → <code>_databricks_bundle_summary</code> →
+   <code>_databricks_auth_login_target</code> → <code>_databricks_auth_login</code> →
+   <code>databricks_auth_login</code> (finish) → <code>_get_env_databricks_workspace_client</code>
+   → <code>get_databricks_workspace_client</code> → <code>get_dbutils</code> → <code>_get_secret</code> →
+   <code>get_databricks_secret</code> → <code>_get_scope_key_secret</code> →
+   <code>DatabricksWorkspaceClientArguments</code>/<code>apply_databricks_secrets_arguments</code>
+   → CLI <code>main()</code>.</li>
+<li><code>onepassword.py</code>, bottom-up: <code>_install_op</code> → <code>which_op</code> → <code>_op_signin</code>
+   → <code>iter_op_account_list</code> → <code>op_signin</code> →
+   <code>async_read_onepassword_secret</code>/<code>_read_onepassword_secret</code> →
+   <code>get_onepassword_secret</code>/<code>read_onepassword_secret</code> →
+   <code>ApplyOnepasswordArgumentsOptions</code>/<code>apply_onepassword_arguments</code> → CLI
+   <code>main()</code>.</li>
+<li>Tests, per module, alongside each step (not deferred to the end) —
+   easier to confirm <code>TimeoutExpired</code> actually propagates one layer at a
+   time than to debug the whole chain after every function has changed.</li>
+<li><code>make format</code> and <code>make test</code> at the end.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.top"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../../assets/javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>
