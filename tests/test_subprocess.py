@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from contextlib import suppress
-from io import StringIO
-from subprocess import CalledProcessError, TimeoutExpired
-from typing import TYPE_CHECKING, TextIO
+from subprocess import TimeoutExpired
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -20,6 +20,7 @@ from decorative_secrets.errors import (
     HomebrewNotInstalledError,
 )
 from decorative_secrets.subprocess import (
+    CalledProcessError,
     check_call,
     check_output,
     get_default_shell,
@@ -79,28 +80,76 @@ def test_which_winget_timeout_expires() -> None:
             which_winget(timeout=1e-6)
 
 
-def test_check_output() -> None:
+def test_check_call_suppresses_and_attaches_stderr(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
     """
-    Verify that the `check_output` function works as expected.
+    `check_call` suppresses a failing command's stderr from the console,
+    attaches it to `error.stderr` as bytes, and includes it in
+    `str(error)`.
     """
-    stderr: TextIO = sys.stderr
-    with StringIO() as temp_stderr:
-        sys.stderr = temp_stderr
-        try:
-            check_call(
-                (
-                    "bash",
-                    "wtf",
-                )
-            )
-        except CalledProcessError as error:
-            temp_stderr.seek(0)
-            if temp_stderr.read():
-                pytest.raises(AssertionError)
-            if not error.stderr:
-                pytest.raises(AssertionError)
-        finally:
-            sys.stderr = stderr
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_call(("bash", "-c", "echo oops >&2; exit 3"))
+    assert capfd.readouterr().err == ""
+    error: CalledProcessError = exc_info.value
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert isinstance(error.stderr, bytes)
+    assert b"oops" in error.stderr
+    assert error.returncode == 3
+    assert "oops" in str(error)
+
+
+def test_check_output_error_str_includes_stderr() -> None:
+    """
+    `check_output` includes captured stderr in `str(error)` on failure.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(("bash", "-c", "echo oops >&2; exit 1"))
+    assert "oops" in str(exc_info.value)
+
+
+def test_check_output_unsuppressed_error_str_includes_stderr() -> None:
+    """
+    With `suppress_stderr=False`, a failing command's stderr is still
+    included in `str(error)`.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            ("bash", "-c", "echo oops >&2; exit 1"),
+            suppress_stderr=False,
+        )
+    assert "oops" in str(exc_info.value)
+
+
+def test_check_output_error_output_remains_bytes() -> None:
+    """
+    With `text=False`, a failing command's captured stdout is still
+    attached to the error as `bytes` — rewriting the raise sites does not
+    alter `error.output`.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            ("bash", "-c", "echo out; echo oops >&2; exit 1"),
+            text=False,
+        )
+    error: CalledProcessError = exc_info.value
+    assert isinstance(error.output, bytes)
+    assert b"out" in error.output
+
+
+def test_called_process_error_str_truncates_long_stderr() -> None:
+    """
+    `str(error)` truncates stderr longer than the tail-length cap,
+    keeping only the end of the output (where the actionable error
+    usually is) and marking the truncation.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            ("bash", "-c", "yes error-line | head -c 20000 >&2; exit 1")
+        )
+    message: str = str(exc_info.value)
+    assert "..." in message
+    assert len(message) < 15_000
 
 
 def test_get_default_shell() -> None:
