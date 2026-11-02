@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import timedelta
+from pathlib import Path
+from shutil import which
 from subprocess import CalledProcessError, TimeoutExpired
 from time import monotonic
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pytest
+from databricks.sdk.errors import OperationFailed
 from databricks.sdk.errors.platform import ResourceDoesNotExist
+from databricks.sdk.service.compute import Environment
+from databricks.sdk.service.jobs import (
+    JobEnvironment,
+    RunResultState,
+    Source,
+    SparkPythonTask,
+    SubmitTask,
+)
+from databricks.sdk.service.workspace import ImportFormat
 from pyspark import cloudpickle
 
 from decorative_secrets._utilities import get_prefixed_environ
@@ -26,6 +40,7 @@ from decorative_secrets.databricks import (
     get_databricks_secret,
     get_databricks_workspace_client,
     get_dbutils,
+    is_databricks_runtime,
     which_databricks,
 )
 from decorative_secrets.databricks import (
@@ -40,6 +55,7 @@ if TYPE_CHECKING:
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.dbutils import RemoteDbUtils
     from databricks.sdk.service.iam import User
+    from databricks.sdk.service.jobs import Run, RunOutput, RunTask
 
     from decorative_secrets.databricks import _DatabricksAuthProfile
 
@@ -618,6 +634,105 @@ def test_databricks_cli_install_command() -> None:
         databricks_main()
     finally:
         sys.argv = argv
+
+
+def test_is_databricks_runtime(tmp_path: Path) -> None:
+    """
+    `is_databricks_runtime` is `False` locally, and `True` on the driver and
+    workers of real Databricks (serverless) compute.
+
+    The working tree is built into a wheel and run remotely, because the
+    function is not necessarily in a published release.
+    """
+    assert not is_databricks_runtime()
+    repo_root: Path = Path(__file__).resolve().parent.parent
+    task_script: Path = Path(__file__).resolve().parent / (
+        "is_databricks_runtime_task.py"
+    )
+    hatch: str = which("hatch") or "hatch"
+    check_output(
+        (
+            hatch,
+            "run",
+            "python",
+            "-m",
+            "pip",
+            "wheel",
+            "--no-deps",
+            "--wheel-dir",
+            str(tmp_path),
+            str(repo_root),
+        ),
+        cwd=repo_root,
+        timeout=600,
+    )
+    wheel: Path = next(tmp_path.glob("decorative_secrets-*.whl"))
+    client: WorkspaceClient = get_databricks_workspace_client()
+    user_name: str | None = client.current_user.me().user_name
+    assert user_name
+    # A unique directory prevents concurrent runs (e.g. the CI matrix)
+    # from colliding
+    workspace_directory: str = (
+        f"/Workspace/Users/{user_name}/decorative-secrets-tests/{uuid4().hex}"
+    )
+    workspace_script: str = f"{workspace_directory}/{task_script.name}"
+    workspace_wheel: str = f"{workspace_directory}/{wheel.name}"
+    client.workspace.mkdirs(workspace_directory)
+    try:
+        with task_script.open("rb") as script_io:
+            client.workspace.upload(
+                workspace_script,
+                script_io,
+                format=ImportFormat.AUTO,
+                overwrite=True,
+            )
+        with wheel.open("rb") as wheel_io:
+            client.workspace.upload(
+                workspace_wheel,
+                wheel_io,
+                format=ImportFormat.AUTO,
+                overwrite=True,
+            )
+        task_key: str = "is_databricks_runtime"
+        run: Run
+        try:
+            run = client.jobs.submit(
+                run_name=f"decorative-secrets-{task_key}",
+                tasks=[
+                    SubmitTask(
+                        task_key=task_key,
+                        spark_python_task=SparkPythonTask(
+                            python_file=workspace_script,
+                            source=Source.WORKSPACE,
+                        ),
+                        environment_key="default",
+                    )
+                ],
+                environments=[
+                    JobEnvironment(
+                        environment_key="default",
+                        spec=Environment(
+                            environment_version="2",
+                            dependencies=[workspace_wheel],
+                        ),
+                    )
+                ],
+            ).result(timeout=timedelta(minutes=20))
+        except OperationFailed as error:
+            pytest.fail(f"Remote run failed: {error}")
+        assert run.tasks
+        task_run: RunTask = run.tasks[0]
+        assert task_run.state
+        if task_run.state.result_state != RunResultState.SUCCESS:
+            output: RunOutput = client.jobs.get_run_output(
+                int(task_run.run_id or 0)
+            )
+            pytest.fail(
+                f"Remote task did not succeed: {task_run.state}\n"
+                f"{output.error}\n{output.error_trace}"
+            )
+    finally:
+        client.workspace.delete(workspace_directory, recursive=True)
 
 
 if __name__ == "__main__":
