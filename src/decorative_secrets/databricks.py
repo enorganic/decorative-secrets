@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.config import Config
 
 from decorative_secrets._utilities import (
     get_prefixed_environ,
@@ -32,7 +33,6 @@ from decorative_secrets.utilities import retry
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from databricks.sdk.config import Config
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
 
@@ -541,7 +541,7 @@ def databricks_auth_login(
     )
 
 
-def is_databricks_runtime() -> bool:
+def _is_databricks_runtime() -> bool:
     """
     Return `True` if we are running within a Databricks Runtime, otherwise
     return `False`.
@@ -563,6 +563,40 @@ def is_databricks_runtime() -> bool:
         # DBR 19 Standard Compute Workers/Executors
         or sys.prefix.startswith("/databricks/")
     )
+
+
+def _normalize_host(host: str) -> str:
+    """
+    Reduce a workspace host to a comparable form (no scheme, no trailing
+    slash, lower case).
+    """
+    return (
+        host.strip()
+        .lower()
+        .removeprefix("https://")
+        .removeprefix("http://")
+        .rstrip("/")
+    )
+
+
+def _is_databricks_runtime_workspace_host(host: str) -> bool:
+    """
+    Return `True` if we are running within a Databricks Runtime, and `host`
+    is the workspace which that runtime belongs to.
+
+    The SDK's runtime authentication always targets the workspace of the
+    runtime, replacing any other host, so it must only be selected for that
+    workspace.
+    """
+    if not _is_databricks_runtime():
+        return False
+    try:
+        runtime_host: str | None = Config(auth_type="runtime").host
+    except ValueError:
+        return False
+    if not runtime_host:
+        return False
+    return _normalize_host(runtime_host) == _normalize_host(host)
 
 
 @cache
@@ -645,7 +679,9 @@ def _get_env_databricks_workspace_client(
                 )
             )
         )
-        and is_databricks_runtime()
+        # Runtime authentication always targets the runtime's own
+        # workspace, so a different host retains normal authentication
+        and _is_databricks_runtime_workspace_host(host)
     ):
         auth_type = "runtime"
     if config:  # pragma: no cover
