@@ -17,7 +17,11 @@ from decorative_secrets.databricks import is_databricks_runtime
 
 @udf("boolean")
 def _is_databricks_runtime_on_worker(_: int) -> bool:
-    from decorative_secrets.databricks import is_databricks_runtime
+    # Imported inside the function so the import happens on the worker,
+    # rather than depending on how this script's globals are pickled
+    from decorative_secrets.databricks import (  # noqa: PLC0415
+        is_databricks_runtime,
+    )
 
     return is_databricks_runtime()
 
