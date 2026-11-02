@@ -37,6 +37,7 @@ from decorative_secrets.databricks import (
     _install_sh_databricks_cli,
     _is_databricks_runtime,
     _is_databricks_runtime_workspace_host,
+    _iter_authentication_environment_variables,
     _normalize_host,
     apply_databricks_secrets_arguments,
     databricks_auth_login,
@@ -672,6 +673,44 @@ def test_is_databricks_runtime_workspace_host_outside_runtime() -> None:
     """
     assert not _is_databricks_runtime_workspace_host(
         "https://example.cloud.databricks.com"
+    )
+
+
+@pytest.mark.parametrize(
+    "variable",
+    [
+        "ARM_CLIENT_ID",
+        "ARM_CLIENT_SECRET",
+        "ARM_TENANT_ID",
+        "ARM_USE_MSI",
+        "GOOGLE_CREDENTIALS",
+        "DATABRICKS_GOOGLE_SERVICE_ACCOUNT",
+        "DATABRICKS_AZURE_RESOURCE_ID",
+        "DATABRICKS_TOKEN",
+        "DATABRICKS_CLIENT_ID",
+        "DATABRICKS_CLIENT_SECRET",
+        "DATABRICKS_USERNAME",
+        "DATABRICKS_PASSWORD",
+        "DATABRICKS_AUTH_TYPE",
+        "DATABRICKS_CONFIG_PROFILE",
+    ],
+)
+def test_iter_authentication_environment_variables_includes(
+    variable: str,
+) -> None:
+    """
+    Environment variables which select an authentication method, or supply
+    its credentials (including Azure and Google), are recognized.
+    """
+    assert variable in tuple(_iter_authentication_environment_variables())
+
+
+def test_iter_authentication_environment_variables_excludes_host() -> None:
+    """
+    A host alone does not select an authentication method.
+    """
+    assert "DATABRICKS_HOST" not in tuple(
+        _iter_authentication_environment_variables()
     )
 
 
