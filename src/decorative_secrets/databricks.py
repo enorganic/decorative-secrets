@@ -541,6 +541,30 @@ def databricks_auth_login(
     )
 
 
+def is_databricks_runtime() -> bool:
+    """
+    Return `True` if we are running within a Databricks Runtime, otherwise
+    return `False`.
+    """
+    return (
+        any(
+            map(
+                os.environ.get,
+                (
+                    # Serverless and Classic Compute Drivers
+                    "DATABRICKS_RUNTIME_VERSION",
+                    # Classic Compute Executors
+                    "DBR_VERSION",
+                ),
+            )
+        )
+        # Serverless Compute Workers/Executors
+        or os.environ.get("DB_HOME") == "/databricks"
+        # DBR 19 Standard Compute Workers/Executors
+        or sys.prefix.startswith("/databricks/")
+    )
+
+
 @cache
 def _get_env_databricks_workspace_client(
     host: str | None = None,
@@ -579,6 +603,8 @@ def _get_env_databricks_workspace_client(
     Get a Databricks WorkspaceClient. This function is cached based on
     environment variables, to ensure changes to the environment are reflected.
     """
+    if host and (not auth_type) and is_databricks_runtime():
+        auth_type = "runtime"
     if config:  # pragma: no cover
         host = host or config.host
         profile = profile or config.profile
