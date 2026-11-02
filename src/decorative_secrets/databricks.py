@@ -31,8 +31,9 @@ from decorative_secrets.subprocess import check_call, check_output
 from decorative_secrets.utilities import retry
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
+    from databricks.sdk.config import ConfigAttribute
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
 
@@ -579,6 +580,20 @@ def _normalize_host(host: str) -> str:
     )
 
 
+def _iter_authentication_environment_variables() -> Iterable[str]:
+    """
+    Yield the names of the environment variables which select a Databricks
+    authentication method, or provide its credentials.
+    """
+    attribute: ConfigAttribute
+    for attribute in Config.attributes():
+        if attribute.auth and attribute.env:
+            yield attribute.env
+    # These select an authentication method without belonging to one
+    yield "DATABRICKS_AUTH_TYPE"
+    yield "DATABRICKS_CONFIG_PROFILE"
+
+
 def _is_databricks_runtime_workspace_host(host: str) -> bool:
     """
     Return `True` if we are running within a Databricks Runtime, and `host`
@@ -655,6 +670,7 @@ def _get_env_databricks_workspace_client(
                     azure_workspace_resource_id,
                     azure_client_id,
                     azure_client_secret,
+                    azure_tenant_id,
                     google_credentials,
                     google_service_account,
                     credentials_strategy,
@@ -667,15 +683,7 @@ def _get_env_databricks_workspace_client(
             not any(
                 map(
                     os.environ.get,
-                    (
-                        "DATABRICKS_AUTH_TYPE",
-                        "DATABRICKS_TOKEN",
-                        "DATABRICKS_USERNAME",
-                        "DATABRICKS_PASSWORD",
-                        "DATABRICKS_CLIENT_ID",
-                        "DATABRICKS_CLIENT_SECRET",
-                        "DATABRICKS_CONFIG_PROFILE",
-                    ),
+                    _iter_authentication_environment_variables(),
                 )
             )
         )
