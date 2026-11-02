@@ -4,7 +4,6 @@ import os
 import sys
 from datetime import timedelta
 from pathlib import Path
-from shutil import which
 from subprocess import CalledProcessError, TimeoutExpired
 from time import monotonic
 from typing import TYPE_CHECKING
@@ -651,14 +650,12 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
     function is not necessarily in a published release.
     """
     assert not is_databricks_runtime()
-    hatch: str = which("hatch") or "hatch"
-    key: str
-    value: str
+    # Use the interpreter running the tests: launching the `hatch` console
+    # script from inside a test fails on some CI runners (a space in the
+    # macOS install path, a broken uv trampoline on Windows)
     check_output(
         (
-            hatch,
-            "run",
-            "python",
+            sys.executable,
             "-m",
             "pip",
             "wheel",
@@ -669,11 +666,6 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
         ),
         cwd=REPOSITORY_ROOT,
         timeout=600,
-        env={
-            key: value
-            for key, value in os.environ.items()
-            if not key.startswith("HATCH_")
-        },
     )
     wheel: Path = next(tmp_path.glob("decorative_secrets-*.whl"))
     client: WorkspaceClient = get_databricks_workspace_client()
