@@ -60,6 +60,12 @@ if TYPE_CHECKING:
     from decorative_secrets.databricks import _DatabricksAuthProfile
 
 
+REPOSITORY_ROOT: Path = Path(__file__).resolve().parent.parent
+IS_DATABRICKS_RUNTIME_TASK_PY: Path = Path(__file__).resolve().parent / (
+    "is_databricks_runtime_task.py"
+)
+
+
 def test_install_sh_databricks_cli() -> None:
     """
     Verify that the Databricks CLI install script can be downloaded and run.
@@ -645,11 +651,9 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
     function is not necessarily in a published release.
     """
     assert not is_databricks_runtime()
-    repo_root: Path = Path(__file__).resolve().parent.parent
-    task_script: Path = Path(__file__).resolve().parent / (
-        "is_databricks_runtime_task.py"
-    )
     hatch: str = which("hatch") or "hatch"
+    key: str
+    value: str
     check_output(
         (
             hatch,
@@ -661,10 +665,15 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
             "--no-deps",
             "--wheel-dir",
             str(tmp_path),
-            str(repo_root),
+            str(REPOSITORY_ROOT),
         ),
-        cwd=repo_root,
+        cwd=REPOSITORY_ROOT,
         timeout=600,
+        env={
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("HATCH_")
+        },
     )
     wheel: Path = next(tmp_path.glob("decorative_secrets-*.whl"))
     client: WorkspaceClient = get_databricks_workspace_client()
@@ -675,11 +684,13 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
     workspace_directory: str = (
         f"/Workspace/Users/{user_name}/decorative-secrets-tests/{uuid4().hex}"
     )
-    workspace_script: str = f"{workspace_directory}/{task_script.name}"
+    workspace_script: str = (
+        f"{workspace_directory}/{IS_DATABRICKS_RUNTIME_TASK_PY.name}"
+    )
     workspace_wheel: str = f"{workspace_directory}/{wheel.name}"
     client.workspace.mkdirs(workspace_directory)
     try:
-        with task_script.open("rb") as script_io:
+        with IS_DATABRICKS_RUNTIME_TASK_PY.open("rb") as script_io:
             client.workspace.upload(
                 workspace_script,
                 script_io,
