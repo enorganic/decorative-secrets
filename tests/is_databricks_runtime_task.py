@@ -4,15 +4,26 @@ This script is executed *on Databricks compute* (not locally) by
 not named `test_*`, so pytest does not collect it.
 
 It fails (non-zero exit, visible in the run output) unless
-`is_databricks_runtime()` returns `True` on both the driver and the workers.
+`is_databricks_runtime()` returns `True` on both the driver and the workers,
+and unless a workspace client created with an explicit host (and no
+`auth_type`) authenticates with the runtime identity, while credentials which
+are explicitly supplied still take precedence.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf
 
-from decorative_secrets.databricks import is_databricks_runtime
+from decorative_secrets.databricks import (
+    get_databricks_workspace_client,
+    is_databricks_runtime,
+)
+
+if TYPE_CHECKING:
+    from databricks.sdk import WorkspaceClient
 
 
 @udf("boolean")
@@ -39,6 +50,26 @@ def main() -> None:
         .collect()
     ):
         message = "is_databricks_runtime() was False on a worker"
+        raise RuntimeError(message)
+    host: str = f"https://{spark.conf.get('spark.databricks.workspaceUrl')}"
+    # An explicit host, with nothing else selecting an authentication
+    # method, defaults to runtime authentication...
+    client: WorkspaceClient = get_databricks_workspace_client(host=host)
+    if client.config.auth_type != "runtime":
+        message = f"Expected runtime auth, got {client.config.auth_type!r}"
+        raise RuntimeError(message)
+    # ...and works for a real API call
+    if not client.current_user.me().user_name:
+        message = "The runtime-authenticated client has no user name"
+        raise RuntimeError(message)
+    # Explicitly supplied credentials are respected, not overridden
+    # (a placeholder value: the client is never used to make a request)
+    token_client: WorkspaceClient = get_databricks_workspace_client(
+        host=host,
+        token="placeholder-token",
+    )
+    if token_client.config.auth_type != "pat":
+        message = f"Expected token auth, got {token_client.config.auth_type!r}"
         raise RuntimeError(message)
 
 

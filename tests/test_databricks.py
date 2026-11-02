@@ -15,6 +15,7 @@ from databricks.sdk.errors.platform import ResourceDoesNotExist
 from databricks.sdk.service.compute import Environment
 from databricks.sdk.service.jobs import (
     JobEnvironment,
+    RunLifeCycleState,
     RunResultState,
     Source,
     SparkPythonTask,
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
 
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.dbutils import RemoteDbUtils
+    from databricks.sdk.service._internal import Wait
     from databricks.sdk.service.iam import User
     from databricks.sdk.service.jobs import Run, RunOutput, RunTask
 
@@ -641,6 +643,25 @@ def test_databricks_cli_install_command() -> None:
         sys.argv = argv
 
 
+_REMOTE_RUN_TIMEOUT_SECONDS: int = 20 * 60
+
+
+def _cancel_run_if_active(client: WorkspaceClient, run_id: int) -> None:
+    """
+    Cancel a Databricks run, and wait for it to stop, unless it has already
+    reached a terminal state.
+    """
+    life_cycle_state: RunLifeCycleState | None = client.jobs.get_run(
+        run_id
+    ).state.life_cycle_state  # type: ignore[union-attr]
+    if life_cycle_state not in {
+        RunLifeCycleState.TERMINATED,
+        RunLifeCycleState.SKIPPED,
+        RunLifeCycleState.INTERNAL_ERROR,
+    }:
+        client.jobs.cancel_run(run_id).result()
+
+
 def test_is_databricks_runtime(tmp_path: Path) -> None:
     """
     `is_databricks_runtime` is `False` locally, and `True` on the driver and
@@ -698,31 +719,43 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
             )
         task_key: str = "is_databricks_runtime"
         run: Run
+        # Retain the run ID, so the run can be cancelled if we stop waiting
+        # (`result(timeout=...)` only bounds local polling, it does not stop
+        # the remote run)
+        waiter: Wait[Run] = client.jobs.submit(
+            run_name=f"decorative-secrets-{task_key}",
+            # Server-side limit, in case the client never gets to cancel
+            timeout_seconds=_REMOTE_RUN_TIMEOUT_SECONDS,
+            tasks=[
+                SubmitTask(
+                    task_key=task_key,
+                    spark_python_task=SparkPythonTask(
+                        python_file=workspace_script,
+                        source=Source.WORKSPACE,
+                    ),
+                    environment_key="default",
+                )
+            ],
+            environments=[
+                JobEnvironment(
+                    environment_key="default",
+                    spec=Environment(
+                        environment_version="2",
+                        dependencies=[workspace_wheel],
+                    ),
+                )
+            ],
+        )
         try:
-            run = client.jobs.submit(
-                run_name=f"decorative-secrets-{task_key}",
-                tasks=[
-                    SubmitTask(
-                        task_key=task_key,
-                        spark_python_task=SparkPythonTask(
-                            python_file=workspace_script,
-                            source=Source.WORKSPACE,
-                        ),
-                        environment_key="default",
-                    )
-                ],
-                environments=[
-                    JobEnvironment(
-                        environment_key="default",
-                        spec=Environment(
-                            environment_version="2",
-                            dependencies=[workspace_wheel],
-                        ),
-                    )
-                ],
-            ).result(timeout=timedelta(minutes=20))
+            run = waiter.result(
+                timeout=timedelta(seconds=_REMOTE_RUN_TIMEOUT_SECONDS)
+            )
         except OperationFailed as error:
             pytest.fail(f"Remote run failed: {error}")
+        finally:
+            # Never leave a run active (and billable) once we stop waiting
+            # for it, or delete the files it is still using
+            _cancel_run_if_active(client, int(waiter.run_id))
         assert run.tasks
         task_run: RunTask = run.tasks[0]
         assert task_run.state

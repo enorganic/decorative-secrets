@@ -603,12 +603,55 @@ def _get_env_databricks_workspace_client(
     Get a Databricks WorkspaceClient. This function is cached based on
     environment variables, to ensure changes to the environment are reflected.
     """
-    if host and (not auth_type) and is_databricks_runtime():
+    if (
+        host
+        and (not auth_type)
+        # Only default to runtime authentication when no other
+        # authentication method has been selected, by argument or by
+        # environment variable
+        and (
+            not any(
+                (
+                    token,
+                    username,
+                    password,
+                    client_id,
+                    client_secret,
+                    profile,
+                    azure_workspace_resource_id,
+                    azure_client_id,
+                    azure_client_secret,
+                    google_credentials,
+                    google_service_account,
+                    credentials_strategy,
+                    credentials_provider,
+                    config,
+                )
+            )
+        )
+        and (
+            not any(
+                map(
+                    os.environ.get,
+                    (
+                        "DATABRICKS_AUTH_TYPE",
+                        "DATABRICKS_TOKEN",
+                        "DATABRICKS_USERNAME",
+                        "DATABRICKS_PASSWORD",
+                        "DATABRICKS_CLIENT_ID",
+                        "DATABRICKS_CLIENT_SECRET",
+                        "DATABRICKS_CONFIG_PROFILE",
+                    ),
+                )
+            )
+        )
+        and is_databricks_runtime()
+    ):
         auth_type = "runtime"
     if config:  # pragma: no cover
         host = host or config.host
         profile = profile or config.profile
-    if not (
+    if (auth_type != "runtime") and not (
         token
         or (
             (
