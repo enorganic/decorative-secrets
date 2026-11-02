@@ -18,8 +18,9 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf
 
 from decorative_secrets.databricks import (
+    _is_databricks_runtime,
+    _is_databricks_runtime_workspace_host,
     get_databricks_workspace_client,
-    is_databricks_runtime,
 )
 
 if TYPE_CHECKING:
@@ -31,15 +32,15 @@ def _is_databricks_runtime_on_worker(_: int) -> bool:
     # Imported inside the function so the import happens on the worker,
     # rather than depending on how this script's globals are pickled
     from decorative_secrets.databricks import (  # noqa: PLC0415
-        is_databricks_runtime,
+        _is_databricks_runtime,
     )
 
-    return is_databricks_runtime()
+    return _is_databricks_runtime()
 
 
 def main() -> None:
     message: str
-    if not is_databricks_runtime():
+    if not _is_databricks_runtime():
         message = "is_databricks_runtime() was False on the driver"
         raise RuntimeError(message)
     spark: SparkSession = SparkSession.builder.getOrCreate()
@@ -52,6 +53,21 @@ def main() -> None:
         message = "is_databricks_runtime() was False on a worker"
         raise RuntimeError(message)
     host: str = f"https://{spark.conf.get('spark.databricks.workspaceUrl')}"
+    # Runtime authentication is only for the runtime's own workspace
+    # (however its host is written), never for another workspace
+    other_host: str = "https://other-workspace.cloud.databricks.com"
+    if not (
+        _is_databricks_runtime_workspace_host(host)
+        and _is_databricks_runtime_workspace_host(f"{host}/")
+        and _is_databricks_runtime_workspace_host(
+            host.removeprefix("https://").upper()
+        )
+    ):
+        message = f"{host!r} was not recognized as the runtime workspace"
+        raise RuntimeError(message)
+    if _is_databricks_runtime_workspace_host(other_host):
+        message = f"{other_host!r} was wrongly treated as the runtime host"
+        raise RuntimeError(message)
     # An explicit host, with nothing else selecting an authentication
     # method, defaults to runtime authentication...
     client: WorkspaceClient = get_databricks_workspace_client(host=host)

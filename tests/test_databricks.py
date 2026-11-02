@@ -35,12 +35,14 @@ from decorative_secrets.databricks import (
     _get_secret,
     _install_databricks_cli,
     _install_sh_databricks_cli,
+    _is_databricks_runtime,
+    _is_databricks_runtime_workspace_host,
+    _normalize_host,
     apply_databricks_secrets_arguments,
     databricks_auth_login,
     get_databricks_secret,
     get_databricks_workspace_client,
     get_dbutils,
-    is_databricks_runtime,
     which_databricks,
 )
 from decorative_secrets.databricks import (
@@ -643,6 +645,36 @@ def test_databricks_cli_install_command() -> None:
         sys.argv = argv
 
 
+_HOST: str = "example.cloud.databricks.com"
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        (f"https://{_HOST}", _HOST),
+        (f"https://{_HOST}/", _HOST),
+        (f"http://{_HOST.upper()}", _HOST),
+        (f"  {_HOST}  ", _HOST),
+        (_HOST, _HOST),
+    ],
+)
+def test_normalize_host(host: str, expected: str) -> None:
+    """
+    Workspace hosts are compared regardless of scheme, case, or a trailing
+    slash.
+    """
+    assert _normalize_host(host) == expected
+
+
+def test_is_databricks_runtime_workspace_host_outside_runtime() -> None:
+    """
+    No host is the runtime workspace when not running in a Databricks Runtime.
+    """
+    assert not _is_databricks_runtime_workspace_host(
+        "https://example.cloud.databricks.com"
+    )
+
+
 _REMOTE_RUN_TIMEOUT_SECONDS: int = 20 * 60
 
 
@@ -670,7 +702,7 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
     The working tree is built into a wheel and run remotely, because the
     function is not necessarily in a published release.
     """
-    assert not is_databricks_runtime()
+    assert not _is_databricks_runtime()
     # Use the interpreter running the tests: launching the `hatch` console
     # script from inside a test fails on some CI runners (a space in the
     # macOS install path, a broken uv trampoline on Windows)
