@@ -15,6 +15,10 @@ See the [design](../specs/2026-11-02-databricks-runtime-auth-without-host-design
    `get_databricks_workspace_client()` authenticates with `runtime` and
    `current_user.me()` succeeds; optionally a host-less
    `get_databricks_secret` if a readable test scope exists.
-5. Bump `pyproject.toml` to 0.14.2.
-6. Verify: `hatch test -k is_databricks_runtime`, then `make format` and
+5. Match by workspace ID when the hosts differ as written:
+   `_get_host_workspace_id` (well-known endpoint, timeout, `None` on failure)
+   and `_get_config_workspace_id` (`get_workspace_id()` via runtime auth);
+   cover them locally and in `tests/is_databricks_runtime_task.py`.
+6. Bump `pyproject.toml` to 0.14.2.
+7. Verify: `hatch test -k is_databricks_runtime`, then `make format` and
    `make test`.

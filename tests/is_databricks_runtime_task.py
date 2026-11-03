@@ -7,17 +7,22 @@ It fails (non-zero exit, visible in the run output) unless
 `is_databricks_runtime()` returns `True` on both the driver and the workers,
 and unless a workspace client created with an explicit host, or with no host
 at all (and no `auth_type`), authenticates with the runtime identity, while
-credentials which are explicitly supplied still take precedence.
+credentials which are explicitly supplied still take precedence. It also
+fails unless the workspace ID reported by the runtime agrees with the one
+advertised by the workspace's host.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from databricks.sdk.config import Config
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf
 
 from decorative_secrets.databricks import (
+    _get_config_workspace_id,
+    _get_host_workspace_id,
     _is_databricks_runtime,
     _is_databricks_runtime_workspace_host,
     get_databricks_workspace_client,
@@ -61,6 +66,27 @@ def _check_hostless_client() -> None:
         raise RuntimeError(message)
 
 
+def _check_workspace_id(host: str) -> None:
+    """
+    Workspaces which are written as different hosts are told apart by ID, so
+    the runtime must report its workspace ID, and it must agree with the ID
+    which the workspace's own host advertises.
+    """
+    runtime_workspace_id: str | None = _get_config_workspace_id(
+        Config(auth_type="runtime")
+    )
+    if not runtime_workspace_id:
+        message = "The runtime did not report a workspace ID"
+        raise RuntimeError(message)
+    host_workspace_id: str | None = _get_host_workspace_id(host)
+    if str(runtime_workspace_id) != host_workspace_id:
+        message = (
+            f"The runtime workspace ID ({runtime_workspace_id!r}) differs "
+            f"from the ID advertised by {host!r} ({host_workspace_id!r})"
+        )
+        raise RuntimeError(message)
+
+
 def main() -> None:
     message: str
     if not _is_databricks_runtime():
@@ -101,6 +127,7 @@ def main() -> None:
     if not client.current_user.me().user_name:
         message = "The runtime-authenticated client has no user name"
         raise RuntimeError(message)
+    _check_workspace_id(host)
     _check_hostless_client()
     # Explicitly supplied credentials are respected, not overridden
     # (a placeholder value: the client is never used to make a request)

@@ -16,6 +16,7 @@ from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.config import Config
+from databricks.sdk.errors import DatabricksError
 
 from decorative_secrets._utilities import (
     get_prefixed_environ,
@@ -594,6 +595,43 @@ def _iter_authentication_environment_variables() -> Iterable[str]:
     yield "DATABRICKS_CONFIG_PROFILE"
 
 
+_HOST_METADATA_TIMEOUT_SECONDS: float = 10
+
+
+def _get_host_workspace_id(host: str) -> str | None:
+    """
+    Return the ID of the workspace served at `host`, as advertised by its
+    (unauthenticated) `/.well-known/databricks-config` endpoint, or `None` if
+    it cannot be determined.
+
+    Two hosts which are written differently (for example a workspace's
+    `dbc-*` URL and a regional URL) can serve the same workspace, which only
+    its ID can tell us.
+    """
+    url: str = f"https://{_normalize_host(host)}/.well-known/databricks-config"
+    try:
+        with urlopen(url, timeout=_HOST_METADATA_TIMEOUT_SECONDS) as response:
+            workspace_id: Any = json.load(response).get("workspace_id")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return str(workspace_id) if workspace_id else None
+
+
+def _get_config_workspace_id(config: Config) -> str | None:
+    """
+    Return the ID of the workspace which the runtime belongs to, or `None` if
+    it cannot be determined.
+
+    `Config.workspace_id` is not available in every SDK version, nor set by
+    every runtime authentication provider, so the ID is asked of the
+    workspace itself, authenticated as the runtime.
+    """
+    try:
+        return str(WorkspaceClient(config=config).get_workspace_id())
+    except (DatabricksError, ValueError, OSError):
+        return None
+
+
 def _is_databricks_runtime_workspace_host(host: str | None) -> bool:
     """
     Return `True` if we are running within a Databricks Runtime, and `host`
@@ -603,18 +641,29 @@ def _is_databricks_runtime_workspace_host(host: str | None) -> bool:
     The SDK's runtime authentication always targets the workspace of the
     runtime, replacing any other host, so it must only be selected for that
     workspace.
+
+    The runtime may report its host differently from how a workspace is
+    usually addressed, so when the hosts differ as written, the workspaces
+    are compared by ID. Any failure to determine either ID means the host is
+    not treated as the runtime's workspace.
     """
     if not _is_databricks_runtime():
         return False
     try:
-        runtime_host: str | None = Config(auth_type="runtime").host
+        runtime_config: Config = Config(auth_type="runtime")
     except ValueError:
         return False
+    runtime_host: str | None = runtime_config.host
     if not runtime_host:
         return False
     if not host:
         return True
-    return _normalize_host(runtime_host) == _normalize_host(host)
+    if _normalize_host(runtime_host) == _normalize_host(host):
+        return True
+    runtime_workspace_id: str | None = _get_config_workspace_id(runtime_config)
+    return bool(runtime_workspace_id) and (
+        runtime_workspace_id == _get_host_workspace_id(host)
+    )
 
 
 @cache
