@@ -43,17 +43,46 @@ running in". Treat it as the runtime's own workspace.
 Outside a runtime nothing changes, because `_is_databricks_runtime()`
 short-circuits first.
 
+## Matching a host which is written differently
+
+A runtime may report its host differently from how a workspace is usually
+addressed (for example a regional URL rather than the workspace's `dbc-*`
+URL), so comparing host strings alone rejects a caller's explicit host for the
+very workspace the runtime belongs to. When the hosts differ as written,
+`_is_databricks_runtime_workspace_host` compares workspace IDs instead:
+
+- The requested host's ID is read from its unauthenticated
+  `/.well-known/databricks-config` endpoint (`_get_host_workspace_id`), with an
+  explicit timeout. `Config(host=...)` is deliberately not used: constructing
+  it also initializes authentication.
+- The runtime's ID is read with `WorkspaceClient.get_workspace_id()`, using the
+  runtime's own authentication (`_get_config_workspace_id`).
+  `Config.workspace_id` is not used: it does not exist in every SDK version
+  (it is absent from the SDK on serverless compute), nor is it set by every
+  runtime authentication provider.
+- Matching host strings short-circuit without any network call, and any
+  failure to determine either ID means "not the runtime's workspace", so the
+  caller falls back to normal authentication.
+
 ## Testing
 
 No mocking of Databricks (see `docs/contributing.md`).
 
 - Local: `_is_databricks_runtime_workspace_host(None)` is `False` outside a
   runtime.
+- Local: `_get_host_workspace_id` is `None` for an unreachable host, and for a
+  real workspace host equals the ID the SDK resolves, however the host is
+  written.
 - Remote: extend `tests/is_databricks_runtime_task.py` to assert that
   `get_databricks_workspace_client()` with no arguments authenticates with
-  `runtime` and can make a real API call.
+  `runtime` and can make a real API call, and that the runtime's workspace ID
+  equals the ID advertised by the workspace's own host.
 
 ## Known gaps and risks
+
+- The ID comparison is only exercised where the two hosts already match as
+  written (serverless compute). A runtime which reports a different host for
+  the same workspace is not reproduced by any test.
 
 - The remote test runs on serverless compute only. The observed failure was on
   classic compute, which the test workspace does not permit ("Only serverless

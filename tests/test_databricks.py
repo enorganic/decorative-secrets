@@ -32,6 +32,7 @@ from decorative_secrets.databricks import (
     _databricks_auth_profiles,
     _get_env_databricks_workspace_client,
     _get_host_profile,
+    _get_host_workspace_id,
     _get_secret,
     _install_databricks_cli,
     _install_sh_databricks_cli,
@@ -682,6 +683,33 @@ def test_is_databricks_runtime_workspace_host_outside_runtime(
 
 
 @pytest.mark.parametrize(
+    "host",
+    # `.invalid` is reserved (RFC 2606), so it never resolves
+    ["https://workspace.invalid", "workspace.invalid/", ""],
+)
+def test_get_host_workspace_id_unreachable_host(host: str) -> None:
+    """
+    A host which cannot be reached has no workspace ID, rather than raising.
+    """
+    assert _get_host_workspace_id(host) is None
+
+
+def test_get_host_workspace_id_matches_workspace_client() -> None:
+    """
+    The ID advertised by a real workspace's host is the ID which the SDK
+    resolves for the same host, however the host is written.
+    """
+    client: WorkspaceClient = get_databricks_workspace_client()
+    host: str = client.config.host
+    workspace_id: str | None = _get_host_workspace_id(host)
+    assert workspace_id
+    assert workspace_id == str(client.config.workspace_id)
+    assert _get_host_workspace_id(host.upper().rstrip("/") + "/") == (
+        workspace_id
+    )
+
+
+@pytest.mark.parametrize(
     "variable",
     [
         "ARM_CLIENT_ID",
@@ -828,7 +856,14 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
                 timeout=timedelta(seconds=_REMOTE_RUN_TIMEOUT_SECONDS)
             )
         except OperationFailed as error:
-            pytest.fail(f"Remote run failed: {error}")
+            failed_run: Run = client.jobs.get_run(int(waiter.run_id))
+            failed_output: RunOutput = client.jobs.get_run_output(
+                int((failed_run.tasks or [])[0].run_id or 0)
+            )
+            pytest.fail(
+                f"Remote run failed: {error}\n"
+                f"{failed_output.error}\n{failed_output.error_trace}"
+            )
         finally:
             # Never leave a run active (and billable) once we stop waiting
             # for it, or delete the files it is still using
