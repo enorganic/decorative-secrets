@@ -594,10 +594,11 @@ def _iter_authentication_environment_variables() -> Iterable[str]:
     yield "DATABRICKS_CONFIG_PROFILE"
 
 
-def _is_databricks_runtime_workspace_host(host: str) -> bool:
+def _is_databricks_runtime_workspace_host(host: str | None) -> bool:
     """
     Return `True` if we are running within a Databricks Runtime, and `host`
-    is the workspace which that runtime belongs to.
+    is the workspace which that runtime belongs to. If `host` is `None`, no
+    workspace was specified, which means the workspace of the runtime.
 
     The SDK's runtime authentication always targets the workspace of the
     runtime, replacing any other host, so it must only be selected for that
@@ -611,6 +612,8 @@ def _is_databricks_runtime_workspace_host(host: str) -> bool:
         return False
     if not runtime_host:
         return False
+    if not host:
+        return True
     return _normalize_host(runtime_host) == _normalize_host(host)
 
 
@@ -653,8 +656,7 @@ def _get_env_databricks_workspace_client(
     environment variables, to ensure changes to the environment are reflected.
     """
     if (
-        host
-        and (not auth_type)
+        (not auth_type)
         # Only default to runtime authentication when no other
         # authentication method has been selected, by argument or by
         # environment variable
@@ -688,8 +690,11 @@ def _get_env_databricks_workspace_client(
             )
         )
         # Runtime authentication always targets the runtime's own
-        # workspace, so a different host retains normal authentication
-        and _is_databricks_runtime_workspace_host(host)
+        # workspace, so a different host retains normal authentication.
+        # When no host is given, the workspace is the runtime's own.
+        and _is_databricks_runtime_workspace_host(
+            host or os.environ.get("DATABRICKS_HOST")
+        )
     ):
         auth_type = "runtime"
     if config:  # pragma: no cover

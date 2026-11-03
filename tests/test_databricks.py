@@ -12,7 +12,12 @@ from uuid import uuid4
 import pytest
 from databricks.sdk.errors import OperationFailed
 from databricks.sdk.errors.platform import ResourceDoesNotExist
-from databricks.sdk.service.compute import Environment
+from databricks.sdk.service.compute import (
+    ClusterSpec,
+    DataSecurityMode,
+    Environment,
+    Library,
+)
 from databricks.sdk.service.jobs import (
     JobEnvironment,
     RunLifeCycleState,
@@ -667,13 +672,18 @@ def test_normalize_host(host: str, expected: str) -> None:
     assert _normalize_host(host) == expected
 
 
-def test_is_databricks_runtime_workspace_host_outside_runtime() -> None:
+@pytest.mark.parametrize(
+    "host",
+    [None, "", "https://example.cloud.databricks.com"],
+)
+def test_is_databricks_runtime_workspace_host_outside_runtime(
+    host: str | None,
+) -> None:
     """
-    No host is the runtime workspace when not running in a Databricks Runtime.
+    Nothing is the runtime workspace when not running in a Databricks Runtime,
+    whether a host is given or not.
     """
-    assert not _is_databricks_runtime_workspace_host(
-        "https://example.cloud.databricks.com"
-    )
+    assert not _is_databricks_runtime_workspace_host(host)
 
 
 @pytest.mark.parametrize(
@@ -733,13 +743,20 @@ def _cancel_run_if_active(client: WorkspaceClient, run_id: int) -> None:
         client.jobs.cancel_run(run_id).result()
 
 
-def test_is_databricks_runtime(tmp_path: Path) -> None:
+@pytest.mark.parametrize("compute", ["serverless", "classic"])
+def test_is_databricks_runtime(tmp_path: Path, compute: str) -> None:
     """
     `is_databricks_runtime` is `False` locally, and `True` on the driver and
-    workers of real Databricks (serverless) compute.
+    workers of real Databricks compute, and a workspace client created with
+    or without a host authenticates using the runtime identity.
 
     The working tree is built into a wheel and run remotely, because the
     function is not necessarily in a published release.
+
+    Both serverless and classic compute (a job cluster running a script task,
+    which has no `dbutils` in its globals) are covered: classic compute is
+    where the SDK's default authentication chain reaches the Databricks CLI
+    shim, which refuses non-interactive use.
     """
     assert not _is_databricks_runtime()
     # Use the interpreter running the tests: launching the `hatch` console
@@ -790,24 +807,30 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
             )
         task_key: str = "is_databricks_runtime"
         run: Run
-        # Retain the run ID, so the run can be cancelled if we stop waiting
-        # (`result(timeout=...)` only bounds local polling, it does not stop
-        # the remote run)
-        waiter: Wait[Run] = client.jobs.submit(
-            run_name=f"decorative-secrets-{task_key}",
-            # Server-side limit, in case the client never gets to cancel
-            timeout_seconds=_REMOTE_RUN_TIMEOUT_SECONDS,
-            tasks=[
-                SubmitTask(
-                    task_key=task_key,
-                    spark_python_task=SparkPythonTask(
-                        python_file=workspace_script,
-                        source=Source.WORKSPACE,
+        task: SubmitTask
+        environments: list[JobEnvironment] | None
+        if compute == "classic":
+            environments = None
+            task = SubmitTask(
+                task_key=task_key,
+                spark_python_task=SparkPythonTask(
+                    python_file=workspace_script,
+                    source=Source.WORKSPACE,
+                ),
+                new_cluster=ClusterSpec(
+                    spark_version=client.clusters.select_spark_version(
+                        latest=True
                     ),
-                    environment_key="default",
-                )
-            ],
-            environments=[
+                    node_type_id=client.clusters.select_node_type(
+                        local_disk=True
+                    ),
+                    num_workers=1,
+                    data_security_mode=DataSecurityMode.USER_ISOLATION,
+                ),
+                libraries=[Library(whl=workspace_wheel)],
+            )
+        else:
+            environments = [
                 JobEnvironment(
                     environment_key="default",
                     spec=Environment(
@@ -815,7 +838,24 @@ def test_is_databricks_runtime(tmp_path: Path) -> None:
                         dependencies=[workspace_wheel],
                     ),
                 )
-            ],
+            ]
+            task = SubmitTask(
+                task_key=task_key,
+                spark_python_task=SparkPythonTask(
+                    python_file=workspace_script,
+                    source=Source.WORKSPACE,
+                ),
+                environment_key="default",
+            )
+        # Retain the run ID, so the run can be cancelled if we stop waiting
+        # (`result(timeout=...)` only bounds local polling, it does not stop
+        # the remote run)
+        waiter: Wait[Run] = client.jobs.submit(
+            run_name=f"decorative-secrets-{task_key}-{compute}",
+            # Server-side limit, in case the client never gets to cancel
+            timeout_seconds=_REMOTE_RUN_TIMEOUT_SECONDS,
+            tasks=[task],
+            environments=environments,
         )
         try:
             run = waiter.result(

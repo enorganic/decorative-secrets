@@ -5,9 +5,9 @@ not named `test_*`, so pytest does not collect it.
 
 It fails (non-zero exit, visible in the run output) unless
 `is_databricks_runtime()` returns `True` on both the driver and the workers,
-and unless a workspace client created with an explicit host (and no
-`auth_type`) authenticates with the runtime identity, while credentials which
-are explicitly supplied still take precedence.
+and unless a workspace client created with an explicit host, or with no host
+at all (and no `auth_type`), authenticates with the runtime identity, while
+credentials which are explicitly supplied still take precedence.
 """
 
 from __future__ import annotations
@@ -36,6 +36,29 @@ def _is_databricks_runtime_on_worker(_: int) -> bool:
     )
 
     return _is_databricks_runtime()
+
+
+def _check_hostless_client() -> None:
+    """
+    No host at all means the runtime's own workspace, so a workspace client
+    must default to runtime authentication then too (the SDK's default chain
+    would otherwise reach the Databricks CLI shim, which refuses
+    non-interactive use), and work for a real API call.
+    """
+    message: str
+    if not _is_databricks_runtime_workspace_host(None):
+        message = "No host was not recognized as the runtime workspace"
+        raise RuntimeError(message)
+    client: WorkspaceClient = get_databricks_workspace_client()
+    if client.config.auth_type != "runtime":
+        message = (
+            "Expected runtime auth without a host, "
+            f"got {client.config.auth_type!r}"
+        )
+        raise RuntimeError(message)
+    if not client.current_user.me().user_name:
+        message = "The host-less runtime-authenticated client has no user name"
+        raise RuntimeError(message)
 
 
 def main() -> None:
@@ -78,6 +101,7 @@ def main() -> None:
     if not client.current_user.me().user_name:
         message = "The runtime-authenticated client has no user name"
         raise RuntimeError(message)
+    _check_hostless_client()
     # Explicitly supplied credentials are respected, not overridden
     # (a placeholder value: the client is never used to make a request)
     token_client: WorkspaceClient = get_databricks_workspace_client(
