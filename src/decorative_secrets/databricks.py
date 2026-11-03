@@ -6,9 +6,11 @@ import inspect
 import json
 import os
 import sys
-from contextlib import suppress
+from contextlib import closing, suppress
 from dataclasses import asdict, dataclass
 from functools import cache, partial
+from http import HTTPStatus
+from http.client import HTTPException, HTTPSConnection
 from shutil import which
 from subprocess import CalledProcessError
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -33,6 +35,7 @@ from decorative_secrets.utilities import retry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
+    from http.client import HTTPResponse
 
     from databricks.sdk.config import ConfigAttribute
     from databricks.sdk.credentials_provider import CredentialsStrategy
@@ -608,11 +611,19 @@ def _get_host_workspace_id(host: str) -> str | None:
     `dbc-*` URL and a regional URL) can serve the same workspace, which only
     its ID can tell us.
     """
-    url: str = f"https://{_normalize_host(host)}/.well-known/databricks-config"
     try:
-        with urlopen(url, timeout=_HOST_METADATA_TIMEOUT_SECONDS) as response:
-            workspace_id: Any = json.load(response).get("workspace_id")
-    except (OSError, ValueError, AttributeError):
+        with closing(
+            HTTPSConnection(
+                _normalize_host(host).partition("/")[0],
+                timeout=_HOST_METADATA_TIMEOUT_SECONDS,
+            )
+        ) as connection:
+            connection.request("GET", "/.well-known/databricks-config")
+            response: HTTPResponse = connection.getresponse()
+            if response.status != HTTPStatus.OK:
+                return None
+            workspace_id: Any = json.loads(response.read()).get("workspace_id")
+    except (OSError, HTTPException, ValueError, AttributeError):
         return None
     return str(workspace_id) if workspace_id else None
 
