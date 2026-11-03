@@ -52,18 +52,14 @@ No mocking of Databricks (see `docs/contributing.md`).
 - Remote: extend `tests/is_databricks_runtime_task.py` to assert that
   `get_databricks_workspace_client()` with no arguments authenticates with
   `runtime` and can make a real API call.
-- Classic compute: parametrize `test_is_databricks_runtime` over serverless
-  and a classic `new_cluster` run, using a script task rather than a notebook.
-  This is the configuration which failed. If `Config(auth_type="runtime")`
-  raised there, the helper would return `False` and the fix would silently do
-  nothing, so only a classic run can prove it.
 
 ## Known gaps and risks
 
-- A classic run needs a cluster to start: slower (several minutes) and more
-  expensive than serverless, multiplied across the CI matrix.
-- The identity running the test needs permission to create job clusters, which
-  has not been verified for the CI service principal.
+- The remote test runs on serverless compute only. The observed failure was on
+  classic compute, which the test workspace does not permit ("Only serverless
+  compute is supported in the workspace"), so the classic path is unverified.
+  If `Config(auth_type="runtime")` raised on classic compute, the helper would
+  return `False` and the fix would silently do nothing there.
 - `get_databricks_secret` with no host needs a readable secret scope in the
   test workspace; if none exists, the remote check is limited to the
   workspace client.
