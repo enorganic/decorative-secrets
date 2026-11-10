@@ -8,7 +8,7 @@ Use `make` targets when available for an operation. For example—to upgrade
 dependencies, always use `make upgrade`. To run *all* tests, use `make test`
 (to run individual tests use `hatch test`).
 
-Alway use `hatch run` rather than invoking the underlying virtual environment
+Always use `hatch run` rather than invoking the underlying virtual environment
 directly.
 
 Read `mkdocs.yml` to discover project documentation.
