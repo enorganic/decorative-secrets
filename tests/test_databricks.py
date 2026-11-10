@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import timedelta
+from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired
 from time import monotonic
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pytest
+from databricks.sdk.errors import OperationFailed
 from databricks.sdk.errors.platform import ResourceDoesNotExist
+from databricks.sdk.service.compute import Environment
+from databricks.sdk.service.jobs import (
+    JobEnvironment,
+    RunLifeCycleState,
+    RunResultState,
+    Source,
+    SparkPythonTask,
+    SubmitTask,
+)
+from databricks.sdk.service.workspace import ImportFormat
 from pyspark import cloudpickle
 
 from decorative_secrets._utilities import get_prefixed_environ
@@ -18,9 +32,14 @@ from decorative_secrets.databricks import (
     _databricks_auth_profiles,
     _get_env_databricks_workspace_client,
     _get_host_profile,
+    _get_host_workspace_id,
     _get_secret,
     _install_databricks_cli,
     _install_sh_databricks_cli,
+    _is_databricks_runtime,
+    _is_databricks_runtime_workspace_host,
+    _iter_authentication_environment_variables,
+    _normalize_host,
     apply_databricks_secrets_arguments,
     databricks_auth_login,
     get_databricks_secret,
@@ -39,9 +58,17 @@ if TYPE_CHECKING:
 
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.dbutils import RemoteDbUtils
+    from databricks.sdk.service._internal import Wait
     from databricks.sdk.service.iam import User
+    from databricks.sdk.service.jobs import Run, RunOutput, RunTask
 
     from decorative_secrets.databricks import _DatabricksAuthProfile
+
+
+REPOSITORY_ROOT: Path = Path(__file__).resolve().parent.parent
+IS_DATABRICKS_RUNTIME_TASK_PY: Path = Path(__file__).resolve().parent / (
+    "is_databricks_runtime_task.py"
+)
 
 
 def test_install_sh_databricks_cli() -> None:
@@ -150,13 +177,15 @@ def test_get_databricks_secret_ignores_unrelated_env_changes(
         os.environ.update(env)
 
 
-def test_get_databricks_secret_timeout_expires() -> None:
+def test_get_databricks_secret_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A near-zero `timeout` reaches the implicit CLI-based auth check and
     raises `TimeoutExpired`, when no client credentials are available to
     bypass it entirely.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     env: Mapping[str, str] = os.environ.copy()
     try:
         os.environ.pop("DATABRICKS_CLIENT_ID", None)
@@ -175,14 +204,16 @@ def test_get_databricks_secret_timeout_expires() -> None:
         os.environ.update(env)
 
 
-def test_apply_databricks_secrets_arguments_timeout_expires() -> None:
+def test_apply_databricks_secrets_arguments_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A `timeout` set on `DatabricksWorkspaceClientArguments` reaches the
     underlying secret lookup, surfacing as an `ArgumentsResolutionError`
     (wrapping the `TimeoutExpired`) the same way other callback failures
     propagate through `apply_callback_arguments`.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     env: Mapping[str, str] = os.environ.copy()
 
     @apply_databricks_secrets_arguments(
@@ -310,6 +341,40 @@ def _require_two_valid_databricks_profiles() -> tuple[
     return valid_profiles[0], valid_profiles[1]
 
 
+@pytest.fixture
+def databricks_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> _DatabricksAuthProfile:
+    """
+    A valid, already-authenticated local profile, with `DATABRICKS_HOST`
+    removed so that the profile is the sole source of the host.
+
+    The Databricks CLI is inconsistent about `DATABRICKS_HOST`:
+    `databricks auth profiles` ignores it (reporting each profile as
+    valid against the profile's own host), while `databricks auth
+    describe --profile <name>` lets it *override* the profile's host.
+    Without this, a profile reported `valid` presents its token to
+    whichever workspace the ambient `DATABRICKS_HOST` names — which
+    fails for any contributor whose `~/.databrickscfg` points somewhere
+    other than the workspace configured in `pyproject.toml`.
+    """
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    return _require_valid_databricks_profile()
+
+
+@pytest.fixture
+def databricks_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[_DatabricksAuthProfile, _DatabricksAuthProfile]:
+    """
+    Two distinct, valid, already-authenticated local profiles, with
+    `DATABRICKS_HOST` removed for the same reason as
+    `databricks_profile`.
+    """
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    return _require_two_valid_databricks_profiles()
+
+
 def test_databricks_auth_profiles() -> None:
     """
     `_databricks_auth_profiles` parses real `databricks auth profiles`
@@ -355,29 +420,37 @@ def test_get_host_profile() -> None:
     assert _get_host_profile(profile["host"]) == profile["name"]
 
 
-def test_databricks_auth_describe() -> None:
+def test_databricks_auth_describe(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     `_databricks_auth_describe` reports success for the already
     authenticated local profile.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     assert (
-        _databricks_auth_describe(profile=profile["name"]).get("status")
+        _databricks_auth_describe(profile=databricks_profile["name"]).get(
+            "status"
+        )
         == "success"
     )
 
 
-def test_databricks_auth_describe_timeout_expires() -> None:
+def test_databricks_auth_describe_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A near-zero `timeout` causes `_databricks_auth_describe` to raise
     `TimeoutExpired`.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     with pytest.raises(TimeoutExpired):
-        _databricks_auth_describe(profile=profile["name"], timeout=1e-6)
+        _databricks_auth_describe(
+            profile=databricks_profile["name"], timeout=1e-6
+        )
 
 
-def test_databricks_auth_login_skips_when_already_authenticated() -> None:
+def test_databricks_auth_login_skips_when_already_authenticated(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     With `force=False` (the default), an already-authenticated profile
     short-circuits rather than attempting a fresh login. Verified by
@@ -389,7 +462,7 @@ def test_databricks_auth_login_skips_when_already_authenticated() -> None:
     magnitude gap a `functools.cache` hit gives, so a hard-coded absolute
     threshold would be flaky across machines/networks.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     start: float = monotonic()
     databricks_auth_login(profile=profile["name"])
     short_circuit_seconds: float = monotonic() - start
@@ -400,35 +473,35 @@ def test_databricks_auth_login_skips_when_already_authenticated() -> None:
     assert short_circuit_seconds < (real_login_seconds * 0.75)
 
 
-def test_databricks_auth_login_env_fallback() -> None:
+def test_databricks_auth_login_env_fallback(
+    databricks_profile: _DatabricksAuthProfile,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """
     With no explicit `host`/`profile`/`target`, `DATABRICKS_HOST` is
     honored when resolving whether a login is already valid.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
-    env: dict[str, str] = os.environ.copy()
-    try:
-        os.environ["DATABRICKS_HOST"] = profile["host"]
-        os.environ.pop("DATABRICKS_CONFIG_PROFILE", None)
-        databricks_auth_login()
-        assert (
-            _databricks_auth_describe(host=profile["host"]).get("status")
-            == "success"
+    monkeypatch.setenv("DATABRICKS_HOST", databricks_profile["host"])
+    monkeypatch.delenv("DATABRICKS_CONFIG_PROFILE", raising=False)
+    databricks_auth_login()
+    assert (
+        _databricks_auth_describe(host=databricks_profile["host"]).get(
+            "status"
         )
-    finally:
-        os.environ.clear()
-        os.environ.update(env)
+        == "success"
+    )
 
 
-def test_databricks_auth_login_timeout_expires() -> None:
+def test_databricks_auth_login_timeout_expires(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     A near-zero `timeout` causes `databricks_auth_login` to raise
     `TimeoutExpired`, via its internal `_databricks_auth_describe` status
     check, before any interactive login is ever attempted.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
     with pytest.raises(TimeoutExpired):
-        databricks_auth_login(profile=profile["name"], timeout=1e-6)
+        databricks_auth_login(profile=databricks_profile["name"], timeout=1e-6)
 
 
 @pytest.mark.skipif(
@@ -438,7 +511,9 @@ def test_databricks_auth_login_timeout_expires() -> None:
         "so this can only be run supervised, outside CI."
     ),
 )
-def test_databricks_auth_login_force_reauthenticates() -> None:
+def test_databricks_auth_login_force_reauthenticates(
+    databricks_profile: _DatabricksAuthProfile,
+) -> None:
     """
     `force=True` triggers a real second CLI login round-trip rather than
     returning the memoized result from `_databricks_auth_login`'s `@cache`.
@@ -453,7 +528,7 @@ def test_databricks_auth_login_force_reauthenticates() -> None:
     otherwise short-circuit on its own "already authenticated" check and
     never populate the cache at all.
     """
-    profile: _DatabricksAuthProfile = _require_valid_databricks_profile()
+    profile: _DatabricksAuthProfile = databricks_profile
     # Match the exact cache key `databricks_auth_login` uses internally
     # (`**get_prefixed_environ("DATABRICKS_")` is part of the key), so
     # seeding this entry actually collides with the one `force=True` must
@@ -486,7 +561,9 @@ def test_databricks_auth_login_force_reauthenticates() -> None:
         "so this can only be run supervised, outside CI."
     ),
 )
-def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> None:
+def test_databricks_auth_login_force_clears_cache_for_other_profiles(
+    databricks_profiles: tuple[_DatabricksAuthProfile, _DatabricksAuthProfile],
+) -> None:
     """
     `_databricks_auth_login.cache_clear()` wipes the entire cache, not just
     the entry for the forced profile. Confirm an unrelated, already-cached
@@ -496,7 +573,7 @@ def test_databricks_auth_login_force_clears_cache_for_other_profiles() -> None:
     """
     first: _DatabricksAuthProfile
     second: _DatabricksAuthProfile
-    first, second = _require_two_valid_databricks_profiles()
+    first, second = databricks_profiles
     # Match the exact cache key `databricks_auth_login` uses internally
     # (`**get_prefixed_environ("DATABRICKS_")` is part of the key), so
     # seeding these entries actually collides with what `force=True` must
@@ -568,6 +645,242 @@ def test_databricks_cli_install_command() -> None:
         databricks_main()
     finally:
         sys.argv = argv
+
+
+_HOST: str = "example.cloud.databricks.com"
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        (f"https://{_HOST}", _HOST),
+        (f"https://{_HOST}/", _HOST),
+        (f"http://{_HOST.upper()}", _HOST),
+        (f"  {_HOST}  ", _HOST),
+        (_HOST, _HOST),
+    ],
+)
+def test_normalize_host(host: str, expected: str) -> None:
+    """
+    Workspace hosts are compared regardless of scheme, case, or a trailing
+    slash.
+    """
+    assert _normalize_host(host) == expected
+
+
+@pytest.mark.parametrize(
+    "host",
+    [None, "", "https://example.cloud.databricks.com"],
+)
+def test_is_databricks_runtime_workspace_host_outside_runtime(
+    host: str | None,
+) -> None:
+    """
+    Nothing is the runtime workspace when not running in a Databricks Runtime,
+    whether a host is given or not.
+    """
+    assert not _is_databricks_runtime_workspace_host(host)
+
+
+@pytest.mark.parametrize(
+    "host",
+    # `.invalid` is reserved (RFC 2606), so it never resolves
+    ["https://workspace.invalid", "workspace.invalid/", ""],
+)
+def test_get_host_workspace_id_unreachable_host(host: str) -> None:
+    """
+    A host which cannot be reached has no workspace ID, rather than raising.
+    """
+    assert _get_host_workspace_id(host) is None
+
+
+def test_get_host_workspace_id_matches_workspace_client() -> None:
+    """
+    The ID advertised by a real workspace's host is the ID which the SDK
+    resolves for the same host, however the host is written.
+    """
+    client: WorkspaceClient = get_databricks_workspace_client()
+    host: str = client.config.host
+    workspace_id: str | None = _get_host_workspace_id(host)
+    assert workspace_id
+    assert workspace_id == str(client.config.workspace_id)
+    assert _get_host_workspace_id(host.upper().rstrip("/") + "/") == (
+        workspace_id
+    )
+
+
+@pytest.mark.parametrize(
+    "variable",
+    [
+        "ARM_CLIENT_ID",
+        "ARM_CLIENT_SECRET",
+        "ARM_TENANT_ID",
+        "ARM_USE_MSI",
+        "GOOGLE_CREDENTIALS",
+        "DATABRICKS_GOOGLE_SERVICE_ACCOUNT",
+        "DATABRICKS_AZURE_RESOURCE_ID",
+        "DATABRICKS_TOKEN",
+        "DATABRICKS_CLIENT_ID",
+        "DATABRICKS_CLIENT_SECRET",
+        "DATABRICKS_USERNAME",
+        "DATABRICKS_PASSWORD",
+        "DATABRICKS_AUTH_TYPE",
+        "DATABRICKS_CONFIG_PROFILE",
+    ],
+)
+def test_iter_authentication_environment_variables_includes(
+    variable: str,
+) -> None:
+    """
+    Environment variables which select an authentication method, or supply
+    its credentials (including Azure and Google), are recognized.
+    """
+    assert variable in tuple(_iter_authentication_environment_variables())
+
+
+def test_iter_authentication_environment_variables_excludes_host() -> None:
+    """
+    A host alone does not select an authentication method.
+    """
+    assert "DATABRICKS_HOST" not in tuple(
+        _iter_authentication_environment_variables()
+    )
+
+
+_REMOTE_RUN_TIMEOUT_SECONDS: int = 20 * 60
+
+
+def _cancel_run_if_active(client: WorkspaceClient, run_id: int) -> None:
+    """
+    Cancel a Databricks run, and wait for it to stop, unless it has already
+    reached a terminal state.
+    """
+    life_cycle_state: RunLifeCycleState | None = client.jobs.get_run(
+        run_id
+    ).state.life_cycle_state  # type: ignore[union-attr]
+    if life_cycle_state not in {
+        RunLifeCycleState.TERMINATED,
+        RunLifeCycleState.SKIPPED,
+        RunLifeCycleState.INTERNAL_ERROR,
+    }:
+        client.jobs.cancel_run(run_id).result()
+
+
+def test_is_databricks_runtime(tmp_path: Path) -> None:
+    """
+    `is_databricks_runtime` is `False` locally, and `True` on the driver and
+    workers of real Databricks (serverless) compute, and a workspace client
+    created with or without a host authenticates using the runtime identity.
+
+    The working tree is built into a wheel and run remotely, because the
+    function is not necessarily in a published release.
+    """
+    assert not _is_databricks_runtime()
+    # Use the interpreter running the tests: launching the `hatch` console
+    # script from inside a test fails on some CI runners (a space in the
+    # macOS install path, a broken uv trampoline on Windows)
+    check_output(
+        (
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--no-deps",
+            "--wheel-dir",
+            str(tmp_path),
+            str(REPOSITORY_ROOT),
+        ),
+        cwd=REPOSITORY_ROOT,
+        timeout=600,
+    )
+    wheel: Path = next(tmp_path.glob("decorative_secrets-*.whl"))
+    client: WorkspaceClient = get_databricks_workspace_client()
+    user_name: str | None = client.current_user.me().user_name
+    assert user_name
+    # A unique directory prevents concurrent runs (e.g. the CI matrix)
+    # from colliding
+    workspace_directory: str = (
+        f"/Workspace/Users/{user_name}/decorative-secrets-tests/{uuid4().hex}"
+    )
+    workspace_script: str = (
+        f"{workspace_directory}/{IS_DATABRICKS_RUNTIME_TASK_PY.name}"
+    )
+    workspace_wheel: str = f"{workspace_directory}/{wheel.name}"
+    client.workspace.mkdirs(workspace_directory)
+    try:
+        with IS_DATABRICKS_RUNTIME_TASK_PY.open("rb") as script_io:
+            client.workspace.upload(
+                workspace_script,
+                script_io,
+                format=ImportFormat.AUTO,
+                overwrite=True,
+            )
+        with wheel.open("rb") as wheel_io:
+            client.workspace.upload(
+                workspace_wheel,
+                wheel_io,
+                format=ImportFormat.AUTO,
+                overwrite=True,
+            )
+        task_key: str = "is_databricks_runtime"
+        run: Run
+        # Retain the run ID, so the run can be cancelled if we stop waiting
+        # (`result(timeout=...)` only bounds local polling, it does not stop
+        # the remote run)
+        waiter: Wait[Run] = client.jobs.submit(
+            run_name=f"decorative-secrets-{task_key}",
+            # Server-side limit, in case the client never gets to cancel
+            timeout_seconds=_REMOTE_RUN_TIMEOUT_SECONDS,
+            tasks=[
+                SubmitTask(
+                    task_key=task_key,
+                    spark_python_task=SparkPythonTask(
+                        python_file=workspace_script,
+                        source=Source.WORKSPACE,
+                    ),
+                    environment_key="default",
+                )
+            ],
+            environments=[
+                JobEnvironment(
+                    environment_key="default",
+                    spec=Environment(
+                        environment_version="2",
+                        dependencies=[workspace_wheel],
+                    ),
+                )
+            ],
+        )
+        try:
+            run = waiter.result(
+                timeout=timedelta(seconds=_REMOTE_RUN_TIMEOUT_SECONDS)
+            )
+        except OperationFailed as error:
+            failed_run: Run = client.jobs.get_run(int(waiter.run_id))
+            failed_output: RunOutput = client.jobs.get_run_output(
+                int((failed_run.tasks or [])[0].run_id or 0)
+            )
+            pytest.fail(
+                f"Remote run failed: {error}\n"
+                f"{failed_output.error}\n{failed_output.error_trace}"
+            )
+        finally:
+            # Never leave a run active (and billable) once we stop waiting
+            # for it, or delete the files it is still using
+            _cancel_run_if_active(client, int(waiter.run_id))
+        assert run.tasks
+        task_run: RunTask = run.tasks[0]
+        assert task_run.state
+        if task_run.state.result_state != RunResultState.SUCCESS:
+            output: RunOutput = client.jobs.get_run_output(
+                int(task_run.run_id or 0)
+            )
+            pytest.fail(
+                f"Remote task did not succeed: {task_run.state}\n"
+                f"{output.error}\n{output.error_trace}"
+            )
+    finally:
+        client.workspace.delete(workspace_directory, recursive=True)
 
 
 if __name__ == "__main__":

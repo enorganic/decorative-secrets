@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "decorative-secrets"
-version = "0.13.3"
+version = "0.14.3"
 description = "Decorators for Multi-Source Secret Retrieval"
 readme = "README.md"
 license = "MIT"
@@ -20,7 +20,7 @@ keywords = [
 ]
 dependencies = [
     "nest-asyncio~=1.6",
-    "async-lru~=2.3",
+    "async-lru~=2.4",
 ]
 
 [project.optional-dependencies]
@@ -28,25 +28,25 @@ databricks = [
     "databricks-sdk",
 ]
 aws = [
-    "boto3~=1.42",
+    "boto3~=1.43",
 ]
 onepassword = [
     "onepassword-sdk~=0.4",
     "onepasswordconnectsdk~=2.1",
 ]
 google = [
-    "google-cloud-secret-manager~=2.27",
+    "google-cloud-secret-manager~=2.31",
 ]
 azure = [
-    "azure-keyvault-secrets~=4.11",
+    "azure-keyvault-secrets~=4.12",
 ]
 all = [
     "databricks-sdk",
-    "boto3~=1.42",
+    "boto3~=1.43",
     "onepassword-sdk~=0.4",
     "onepasswordconnectsdk~=2.1",
-    "google-cloud-secret-manager~=2.27",
-    "azure-keyvault-secrets~=4.11",
+    "google-cloud-secret-manager~=2.31",
+    "azure-keyvault-secrets~=4.12",
 ]
 
 [project.scripts]
@@ -119,6 +119,7 @@ extra-args = [
 ]
 extra-dependencies = [
     "dependence",
+    "pip",
     "pyspark",
 ]
 features = [

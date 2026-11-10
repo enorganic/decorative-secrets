@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from contextlib import suppress
-from io import StringIO
-from subprocess import CalledProcessError, TimeoutExpired
-from typing import TYPE_CHECKING, TextIO
+from subprocess import TimeoutExpired
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -20,6 +20,7 @@ from decorative_secrets.errors import (
     HomebrewNotInstalledError,
 )
 from decorative_secrets.subprocess import (
+    CalledProcessError,
     check_call,
     check_output,
     get_default_shell,
@@ -79,28 +80,173 @@ def test_which_winget_timeout_expires() -> None:
             which_winget(timeout=1e-6)
 
 
-def test_check_output() -> None:
+_STDOUT_MARKER: str = "decorative-secrets-stdout-marker"
+_STDERR_MARKER: str = "decorative-secrets-stderr-marker"
+
+
+def _failing_command(script: str) -> tuple[str, ...]:
     """
-    Verify that the `check_output` function works as expected.
+    A command which runs `script` and exists on every supported platform.
+
+    `bash` can't be used for this: on the Windows CI runners `bash`
+    resolves to the WSL launcher (`C:\\Windows\\System32\\bash.exe`),
+    which exits non-zero with its own error before ever running the
+    script — so the command fails for the wrong reason, writing nothing
+    to stderr.
     """
-    stderr: TextIO = sys.stderr
-    with StringIO() as temp_stderr:
-        sys.stderr = temp_stderr
-        try:
-            check_call(
-                (
-                    "bash",
-                    "wtf",
-                )
+    return (sys.executable, "-c", script)
+
+
+def _stderr_section(message: str) -> str:
+    """
+    The stderr which `CalledProcessError.__str__` appends, isolated from
+    the command/exit-code portion of the message.
+
+    Asserting a marker against the whole message would pass even when no
+    stderr was captured at all, because the command repr in that message
+    quotes the script — and therefore the marker — verbatim.
+    """
+    assert "Stderr:" in message
+    return message.split("Stderr:", 1)[1].strip()
+
+
+def test_check_call_suppresses_and_attaches_stderr(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    """
+    `check_call` suppresses a failing command's stderr from the console,
+    attaches it to `error.stderr` as bytes, and includes it in
+    `str(error)`.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_call(
+            _failing_command(
+                f"import sys; sys.stderr.write({_STDERR_MARKER!r}); "
+                f"sys.exit(3)"
             )
-        except CalledProcessError as error:
-            temp_stderr.seek(0)
-            if temp_stderr.read():
-                pytest.raises(AssertionError)
-            if not error.stderr:
-                pytest.raises(AssertionError)
-        finally:
-            sys.stderr = stderr
+        )
+    assert capfd.readouterr().err == ""
+    error: CalledProcessError = exc_info.value
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert isinstance(error.stderr, bytes)
+    assert _STDERR_MARKER.encode() in error.stderr
+    assert error.returncode == 3
+    assert _stderr_section(str(error)) == _STDERR_MARKER
+
+
+def test_check_output_error_str_includes_stderr() -> None:
+    """
+    `check_output` includes captured stderr in `str(error)` on failure.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            _failing_command(
+                f"import sys; sys.stderr.write({_STDERR_MARKER!r}); "
+                f"sys.exit(1)"
+            )
+        )
+    assert _stderr_section(str(exc_info.value)) == _STDERR_MARKER
+
+
+def test_check_output_unsuppressed_error_str_includes_stderr() -> None:
+    """
+    With `suppress_stderr=False`, a failing command's stderr is still
+    included in `str(error)`.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            _failing_command(
+                f"import sys; sys.stderr.write({_STDERR_MARKER!r}); "
+                f"sys.exit(1)"
+            ),
+            suppress_stderr=False,
+        )
+    assert _stderr_section(str(exc_info.value)) == _STDERR_MARKER
+
+
+def test_check_output_error_output_remains_bytes() -> None:
+    """
+    With `text=False`, a failing command's captured stdout is still
+    attached to the error as `bytes` — rewriting the raise sites does not
+    alter `error.output`.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            _failing_command(
+                f"import sys; sys.stdout.write({_STDOUT_MARKER!r}); "
+                f"sys.stderr.write({_STDERR_MARKER!r}); sys.exit(1)"
+            ),
+            text=False,
+        )
+    error: CalledProcessError = exc_info.value
+    assert isinstance(error.output, bytes)
+    assert _STDOUT_MARKER.encode() in error.output
+
+
+_UNDECODABLE_STDERR_SCRIPT: str = (
+    "import sys; sys.stderr.buffer.write(b'\\xff\\xfe\\xfd'); "
+    "sys.stderr.buffer.flush(); sys.exit(1)"
+)
+
+
+def test_called_process_error_str_includes_undecodable_stderr() -> None:
+    """
+    Stderr which is not valid UTF-8 still reaches `str(error)`, rendered
+    as escapes.
+
+    Decoding with `errors="ignore"` would drop those bytes entirely, so
+    stderr consisting only of them would leave the message with no
+    `Stderr:` section at all — silently restoring the very blind spot
+    this class exists to remove.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            _failing_command(_UNDECODABLE_STDERR_SCRIPT),
+            text=False,
+            suppress_stderr=False,
+        )
+    assert _stderr_section(str(exc_info.value)) == r"\xff\xfe\xfd"
+
+
+def test_suppressed_undecodable_stderr_raises_called_process_error() -> None:
+    """
+    A command whose stderr is not valid UTF-8 still raises
+    `CalledProcessError` — with those bytes intact on `error.stderr` and
+    escaped in the message.
+
+    Capturing stderr to a *text*-mode temporary file decoded it strictly
+    on read, so this raised `UnicodeDecodeError` from inside
+    `check_output` instead: the wrong exception type, which no
+    `except CalledProcessError` caller would catch, and which discarded
+    the command's exit status entirely.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_call(_failing_command(_UNDECODABLE_STDERR_SCRIPT))
+    error: CalledProcessError = exc_info.value
+    assert error.returncode == 1
+    assert error.stderr == b"\xff\xfe\xfd"
+    assert _stderr_section(str(error)) == r"\xff\xfe\xfd"
+
+
+def test_called_process_error_str_truncates_long_stderr() -> None:
+    """
+    `str(error)` truncates stderr longer than the tail-length cap,
+    keeping the *end* of the output — where the actionable error usually
+    is — and marking the truncation.
+    """
+    with pytest.raises(CalledProcessError) as exc_info:
+        check_output(
+            _failing_command(
+                f"import sys; "
+                f"sys.stderr.write('e' * 20_000 + {_STDERR_MARKER!r}); "
+                f"sys.exit(1)"
+            )
+        )
+    stderr: str = _stderr_section(str(exc_info.value))
+    assert stderr.startswith("...")
+    # The tail is what survives truncation, not the head
+    assert stderr.endswith(_STDERR_MARKER)
+    assert len(stderr) < 15_000
 
 
 def test_get_default_shell() -> None:

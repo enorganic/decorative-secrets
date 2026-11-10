@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from subprocess import (
     PIPE,
-    CalledProcessError,
     CompletedProcess,
     run,
+)
+from subprocess import (
+    CalledProcessError as _CalledProcessError,
 )
 from subprocess import (
     list2cmdline as _list2cmdline,
@@ -15,6 +17,33 @@ from typing import TYPE_CHECKING, Literal, overload
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from pathlib import Path
+
+_STDERR_TAIL_LENGTH: int = 10_000
+
+
+class CalledProcessError(_CalledProcessError):
+    """
+    Identical to `subprocess.CalledProcessError`, except that `str(error)`
+    includes the tail end of captured stderr, so a default traceback shows
+    the cause of a command's failure instead of just its exit code.
+
+    Bytes which are not valid UTF-8 are rendered as escapes rather than
+    discarded — `errors="ignore"` would decode stderr consisting entirely
+    of such bytes to an empty string, leaving no stderr in the message at
+    all, which is precisely the outcome this class exists to prevent.
+    """
+
+    def __str__(self) -> str:
+        message: str = super().__str__()
+        stderr: str | bytes | None = self.stderr
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", errors="backslashreplace")
+        stderr = (stderr or "").strip()
+        if stderr:
+            if len(stderr) > _STDERR_TAIL_LENGTH:
+                stderr = f"...{stderr[-_STDERR_TAIL_LENGTH:]}"
+            message = f"{message} Stderr:\n{stderr}"
+        return message
 
 
 def get_default_shell() -> str | None:
@@ -48,6 +77,7 @@ def check_output(
     cwd: str | Path | None = None,
     input: str | bytes | None = None,
     env: Mapping[str, str] | None = None,
+    suppress_stderr: bool = True,
     shell: bool = False,
     timeout: float | None = None,
     echo: bool = False,
@@ -142,7 +172,12 @@ def check_output(  # noqa: C901
         input = input.decode("utf-8", errors="ignore")  # noqa: A001
     completed_process: CompletedProcess
     if suppress_stderr:
-        with TemporaryFile("w+") as stderr:
+        # Binary mode: the child writes raw bytes to this file's
+        # descriptor, and a text-mode file would decode them strictly on
+        # `read()` below — raising `UnicodeDecodeError` in place of the
+        # `CalledProcessError` the caller is waiting to catch, whenever a
+        # command's stderr is not valid UTF-8.
+        with TemporaryFile("w+b") as stderr:
             try:
                 completed_process = run(
                     args_,
@@ -156,22 +191,34 @@ def check_output(  # noqa: C901
                     shell=shell_,
                     timeout=timeout,
                 )
-            except CalledProcessError as error:
+            except _CalledProcessError as error:
                 stderr.seek(0)
-                error.stderr = stderr.read().encode("utf-8", errors="ignore")
-                raise
+                raise CalledProcessError(
+                    error.returncode,
+                    error.cmd,
+                    output=error.output,
+                    stderr=stderr.read(),
+                ) from None
     else:
-        completed_process = run(
-            args_,
-            capture_output=True,
-            check=True,
-            cwd=cwd or None,
-            input=input,
-            env=env,
-            text=text,
-            shell=shell_,
-            timeout=timeout,
-        )
+        try:
+            completed_process = run(
+                args_,
+                capture_output=True,
+                check=True,
+                cwd=cwd or None,
+                input=input,
+                env=env,
+                text=text,
+                shell=shell_,
+                timeout=timeout,
+            )
+        except _CalledProcessError as error:
+            raise CalledProcessError(
+                error.returncode,
+                error.cmd,
+                output=error.output,
+                stderr=error.stderr,
+            ) from None
     output: str | bytes | None = None
     if text is None:
         pass

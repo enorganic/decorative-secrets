@@ -6,15 +6,19 @@ import inspect
 import json
 import os
 import sys
-from contextlib import suppress
+from contextlib import closing, suppress
 from dataclasses import asdict, dataclass
 from functools import cache, partial
+from http import HTTPStatus
+from http.client import HTTPException, HTTPSConnection
 from shutil import which
 from subprocess import CalledProcessError
 from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.request import urlopen
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.config import Config
+from databricks.sdk.errors import DatabricksError
 
 from decorative_secrets._utilities import (
     get_prefixed_environ,
@@ -30,9 +34,10 @@ from decorative_secrets.subprocess import check_call, check_output
 from decorative_secrets.utilities import retry
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
+    from http.client import HTTPResponse
 
-    from databricks.sdk.config import Config
+    from databricks.sdk.config import ConfigAttribute
     from databricks.sdk.credentials_provider import CredentialsStrategy
     from databricks.sdk.dbutils import RemoteDbUtils
 
@@ -454,7 +459,9 @@ def _databricks_auth_login(
             )
         except CalledProcessError as error:
             if target:
-                error_message: str = error.stderr.decode()
+                error_message: str = error.stderr.decode(
+                    "utf-8", errors="backslashreplace"
+                )
                 if "https://" not in error_message:
                     _databricks_auth_login_target(
                         target=target, timeout=timeout
@@ -539,6 +546,137 @@ def databricks_auth_login(
     )
 
 
+def _is_databricks_runtime() -> bool:
+    """
+    Return `True` if we are running within a Databricks Runtime, otherwise
+    return `False`.
+    """
+    return (
+        any(
+            map(
+                os.environ.get,
+                (
+                    # Serverless and Classic Compute Drivers
+                    "DATABRICKS_RUNTIME_VERSION",
+                    # Classic Compute Executors
+                    "DBR_VERSION",
+                ),
+            )
+        )
+        # Serverless Compute Workers/Executors
+        or os.environ.get("DB_HOME") == "/databricks"
+        # DBR 19 Standard Compute Workers/Executors
+        or sys.prefix.startswith("/databricks/")
+    )
+
+
+def _normalize_host(host: str) -> str:
+    """
+    Reduce a workspace host to a comparable form (no scheme, no trailing
+    slash, lower case).
+    """
+    return (
+        host.strip()
+        .lower()
+        .removeprefix("https://")
+        .removeprefix("http://")
+        .rstrip("/")
+    )
+
+
+def _iter_authentication_environment_variables() -> Iterable[str]:
+    """
+    Yield the names of the environment variables which select a Databricks
+    authentication method, or provide its credentials.
+    """
+    attribute: ConfigAttribute
+    for attribute in Config.attributes():
+        if attribute.auth and attribute.env:
+            yield attribute.env
+    # These select an authentication method without belonging to one
+    yield "DATABRICKS_AUTH_TYPE"
+    yield "DATABRICKS_CONFIG_PROFILE"
+
+
+_HOST_METADATA_TIMEOUT_SECONDS: float = 10
+
+
+def _get_host_workspace_id(host: str) -> str | None:
+    """
+    Return the ID of the workspace served at `host`, as advertised by its
+    (unauthenticated) `/.well-known/databricks-config` endpoint, or `None` if
+    it cannot be determined.
+
+    Two hosts which are written differently (for example a workspace's
+    `dbc-*` URL and a regional URL) can serve the same workspace, which only
+    its ID can tell us.
+    """
+    try:
+        with closing(
+            HTTPSConnection(
+                _normalize_host(host).partition("/")[0],
+                timeout=_HOST_METADATA_TIMEOUT_SECONDS,
+            )
+        ) as connection:
+            connection.request("GET", "/.well-known/databricks-config")
+            response: HTTPResponse = connection.getresponse()
+            if response.status != HTTPStatus.OK:
+                return None
+            workspace_id: Any = json.loads(response.read()).get("workspace_id")
+    except (OSError, HTTPException, ValueError, AttributeError):
+        return None
+    return str(workspace_id) if workspace_id else None
+
+
+def _get_config_workspace_id(config: Config) -> str | None:
+    """
+    Return the ID of the workspace which the runtime belongs to, or `None` if
+    it cannot be determined.
+
+    `Config.workspace_id` is not available in every SDK version, nor set by
+    every runtime authentication provider, so the ID is asked of the
+    workspace itself, authenticated as the runtime.
+    """
+    try:
+        return str(WorkspaceClient(config=config).get_workspace_id())
+    except (DatabricksError, ValueError, OSError):
+        return None
+
+
+def _is_databricks_runtime_workspace_host(host: str | None) -> bool:
+    """
+    Return `True` if we are running within a Databricks Runtime, and `host`
+    is the workspace which that runtime belongs to. If `host` is `None`, no
+    workspace was specified, which means the workspace of the runtime.
+
+    The SDK's runtime authentication always targets the workspace of the
+    runtime, replacing any other host, so it must only be selected for that
+    workspace.
+
+    The runtime may report its host differently from how a workspace is
+    usually addressed, so when the hosts differ as written, the workspaces
+    are compared by ID. Any failure to determine either ID means the host is
+    not treated as the runtime's workspace.
+    """
+    if not _is_databricks_runtime():
+        return False
+    try:
+        runtime_config: Config = Config(auth_type="runtime")
+    except ValueError:
+        return False
+    runtime_host: str | None = runtime_config.host
+    if not runtime_host:
+        return False
+    if not host:
+        return True
+    if _normalize_host(runtime_host) == _normalize_host(host):
+        return True
+    runtime_workspace_id: str | None = _get_config_workspace_id(runtime_config)
+    return bool(runtime_workspace_id) and (
+        runtime_workspace_id == _get_host_workspace_id(host)
+    )
+
+
 @cache
 def _get_env_databricks_workspace_client(
     host: str | None = None,
@@ -577,10 +715,52 @@ def _get_env_databricks_workspace_client(
     Get a Databricks WorkspaceClient. This function is cached based on
     environment variables, to ensure changes to the environment are reflected.
     """
+    if (
+        (not auth_type)
+        # Only default to runtime authentication when no other
+        # authentication method has been selected, by argument or by
+        # environment variable
+        and (
+            not any(
+                (
+                    token,
+                    username,
+                    password,
+                    client_id,
+                    client_secret,
+                    profile,
+                    azure_workspace_resource_id,
+                    azure_client_id,
+                    azure_client_secret,
+                    azure_tenant_id,
+                    google_credentials,
+                    google_service_account,
+                    credentials_strategy,
+                    credentials_provider,
+                    config,
+                )
+            )
+        )
+        and (
+            not any(
+                map(
+                    os.environ.get,
+                    _iter_authentication_environment_variables(),
+                )
+            )
+        )
+        # Runtime authentication always targets the runtime's own
+        # workspace, so a different host retains normal authentication.
+        # When no host is given, the workspace is the runtime's own.
+        and _is_databricks_runtime_workspace_host(
+            host or os.environ.get("DATABRICKS_HOST")
+        )
+    ):
+        auth_type = "runtime"
     if config:  # pragma: no cover
         host = host or config.host
         profile = profile or config.profile
-    if not (
+    if (auth_type != "runtime") and not (
         token
         or (
             (
