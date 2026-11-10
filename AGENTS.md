@@ -11,7 +11,7 @@ dependencies, always use `make upgrade`. To run *all* tests, use `make test`
 Always use `hatch run` rather than invoking the underlying virtual environment
 directly.
 
-Read `mkdocs.yml` to discover project documentation.
+Read `mkdocs.yaml` to discover project documentation.
 
 ## Human Controlled Changes
 
