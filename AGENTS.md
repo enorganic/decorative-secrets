@@ -16,7 +16,7 @@ Read `mkdocs.yml` to discover project documentation.
 ## Human Controlled Changes
 
 Every tracked-file change in this repository requires step-by-step human
-confirmation. No plan, skill, or prior prompt may wave this workflow.
+confirmation. No plan, skill, or prior prompt may waive this workflow.
 
 ### Change Checkpoints
 
